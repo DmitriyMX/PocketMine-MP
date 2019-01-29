@@ -27,7 +27,9 @@ namespace pocketmine\updater;
 
 use pocketmine\scheduler\AsyncTask;
 use pocketmine\Server;
-use pocketmine\utils\Utils;
+use pocketmine\utils\Internet;
+use function is_array;
+use function json_decode;
 
 class UpdateCheckTask extends AsyncTask{
 
@@ -45,21 +47,21 @@ class UpdateCheckTask extends AsyncTask{
 
 	public function onRun(){
 		$error = "";
-		$response = Utils::getURL($this->endpoint . "?channel=" . $this->channel, 4, [], $error);
+		$response = Internet::getURL($this->endpoint . "?channel=" . $this->channel, 4, [], $error);
 		$this->error = $error;
 
 		if($response !== false){
 			$response = json_decode($response, true);
 			if(is_array($response)){
 				if(
-					isset($response["version"]) and
-					isset($response["api_version"]) and
+					isset($response["base_version"]) and
+					isset($response["is_dev"]) and
 					isset($response["build"]) and
 					isset($response["date"]) and
 					isset($response["download_url"])
 				){
 					$response["details_url"] = $response["details_url"] ?? null;
-					$this->setResult($response, true);
+					$this->setResult($response);
 				}elseif(isset($response["error"])){
 					$this->error = $response["error"];
 				}else{

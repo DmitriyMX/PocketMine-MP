@@ -29,12 +29,21 @@ namespace pocketmine\wizard;
 
 use pocketmine\lang\BaseLang;
 use pocketmine\utils\Config;
-use pocketmine\utils\Utils;
+use pocketmine\utils\Internet;
+use pocketmine\utils\InternetException;
+use function base64_encode;
+use function fgets;
+use function random_bytes;
+use function sleep;
+use function strtolower;
+use function substr;
+use function trim;
+use const PHP_EOL;
+use const STDIN;
 
 class SetupWizard{
 	public const DEFAULT_NAME = \pocketmine\NAME . " Server";
 	public const DEFAULT_PORT = 19132;
-	public const DEFAULT_MEMORY = 256;
 	public const DEFAULT_PLAYERS = 20;
 	public const DEFAULT_GAMEMODE = 0;
 
@@ -75,6 +84,11 @@ class SetupWizard{
 			return false;
 		}
 
+		//this has to happen here to prevent user avoiding agreeing to license
+		$config = new Config(\pocketmine\DATA . "server.properties", Config::PROPERTIES);
+		$config->set("language", $lang);
+		$config->save();
+
 		if(strtolower($this->getInput($this->lang->get("skip_installer"), "n", "y/N")) === "y"){
 			return true;
 		}
@@ -92,7 +106,7 @@ class SetupWizard{
 	}
 
 	private function showLicense() : bool{
-		$this->message($this->lang->get("welcome_to_pocketmine"));
+		$this->message($this->lang->translateString("welcome_to_pocketmine", [\pocketmine\NAME]));
 		echo <<<LICENSE
 
   This program is free software: you can redistribute it and/or modify
@@ -103,7 +117,7 @@ class SetupWizard{
 LICENSE;
 		$this->writeLine();
 		if(strtolower($this->getInput($this->lang->get("accept_license"), "n", "y/N")) !== "y"){
-			$this->error($this->lang->get("you_have_to_accept_the_license"));
+			$this->error($this->lang->translateString("you_have_to_accept_the_license", [\pocketmine\NAME]));
 			sleep(5);
 
 			return false;
@@ -206,11 +220,15 @@ LICENSE;
 
 		$this->message($this->lang->get("ip_get"));
 
-		$externalIP = Utils::getIP();
+		$externalIP = Internet::getIP();
 		if($externalIP === false){
 			$externalIP = "unknown (server offline)";
 		}
-		$internalIP = gethostbyname(trim(`hostname`));
+		try{
+			$internalIP = Internet::getInternalIP();
+		}catch(InternetException $e){
+			$internalIP = "unknown (" . $e->getMessage() . ")";
+		}
 
 		$this->error($this->lang->translateString("ip_warning", ["EXTERNAL_IP" => $externalIP, "INTERNAL_IP" => $internalIP]));
 		$this->error($this->lang->get("ip_confirm"));
@@ -220,7 +238,7 @@ LICENSE;
 	private function endWizard(){
 		$this->message($this->lang->get("you_have_finished"));
 		$this->message($this->lang->get("pocketmine_plugins"));
-		$this->message($this->lang->get("pocketmine_will_start"));
+		$this->message($this->lang->translateString("pocketmine_will_start", [\pocketmine\NAME]));
 
 		$this->writeLine();
 		$this->writeLine();
@@ -258,6 +276,4 @@ LICENSE;
 
 		return $input === "" ? $default : $input;
 	}
-
-
 }

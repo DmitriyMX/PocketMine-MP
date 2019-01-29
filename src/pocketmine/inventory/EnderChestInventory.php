@@ -23,8 +23,8 @@ declare(strict_types=1);
 
 namespace pocketmine\inventory;
 
-use pocketmine\entity\Human;
 use pocketmine\level\Position;
+use pocketmine\network\mcpe\protocol\LevelSoundEventPacket;
 use pocketmine\network\mcpe\protocol\types\WindowTypes;
 use pocketmine\tile\EnderChest;
 
@@ -33,7 +33,7 @@ class EnderChestInventory extends ChestInventory{
 	/** @var Position */
 	protected $holder;
 
-	public function __construct(Human $owner){
+	public function __construct(){
 		ContainerInventory::__construct(new Position());
 	}
 
@@ -59,6 +59,14 @@ class EnderChestInventory extends ChestInventory{
 		$this->holder->setLevel($enderChest->getLevel());
 	}
 
+	protected function getOpenSound() : int{
+		return LevelSoundEventPacket::SOUND_ENDERCHEST_OPEN;
+	}
+
+	protected function getCloseSound() : int{
+		return LevelSoundEventPacket::SOUND_ENDERCHEST_CLOSED;
+	}
+
 	/**
 	 * This override is here for documentation and code completion purposes only.
 	 * @return Position
@@ -66,5 +74,4 @@ class EnderChestInventory extends ChestInventory{
 	public function getHolder(){
 		return $this->holder;
 	}
-
 }

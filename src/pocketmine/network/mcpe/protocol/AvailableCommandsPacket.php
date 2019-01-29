@@ -29,13 +29,20 @@ use pocketmine\network\mcpe\NetworkSession;
 use pocketmine\network\mcpe\protocol\types\CommandData;
 use pocketmine\network\mcpe\protocol\types\CommandEnum;
 use pocketmine\network\mcpe\protocol\types\CommandParameter;
+use function array_flip;
+use function array_keys;
+use function array_map;
+use function array_search;
+use function array_values;
+use function count;
+use function dechex;
 
 class AvailableCommandsPacket extends DataPacket{
 	public const NETWORK_ID = ProtocolInfo::AVAILABLE_COMMANDS_PACKET;
 
 
 	/**
-	 * This flag is set on all types EXCEPT the TEMPLATE type. Not completely sure what this is for, but it is required
+	 * This flag is set on all types EXCEPT the POSTFIX type. Not completely sure what this is for, but it is required
 	 * for the argtype to work correctly. VALID seems as good a name as any.
 	 */
 	public const ARG_FLAG_VALID = 0x100000;
@@ -44,21 +51,23 @@ class AvailableCommandsPacket extends DataPacket{
 	 * Basic parameter types. These must be combined with the ARG_FLAG_VALID constant.
 	 * ARG_FLAG_VALID | (type const)
 	 */
-	public const ARG_TYPE_INT      = 0x01;
-	public const ARG_TYPE_FLOAT    = 0x02;
-	public const ARG_TYPE_VALUE    = 0x03;
-	public const ARG_TYPE_TARGET   = 0x04;
+	public const ARG_TYPE_INT             = 0x01;
+	public const ARG_TYPE_FLOAT           = 0x02;
+	public const ARG_TYPE_VALUE           = 0x03;
+	public const ARG_TYPE_WILDCARD_INT    = 0x04;
+	public const ARG_TYPE_TARGET          = 0x05;
+	public const ARG_TYPE_WILDCARD_TARGET = 0x06;
 
-	public const ARG_TYPE_STRING   = 0x0d;
-	public const ARG_TYPE_POSITION = 0x0e;
+	public const ARG_TYPE_STRING   = 0x0f;
+	public const ARG_TYPE_POSITION = 0x10;
 
-	public const ARG_TYPE_RAWTEXT  = 0x11;
+	public const ARG_TYPE_MESSAGE  = 0x13;
 
-	public const ARG_TYPE_TEXT     = 0x13;
+	public const ARG_TYPE_RAWTEXT  = 0x15;
 
-	public const ARG_TYPE_JSON     = 0x16;
+	public const ARG_TYPE_JSON     = 0x18;
 
-	public const ARG_TYPE_COMMAND  = 0x1d;
+	public const ARG_TYPE_COMMAND  = 0x1f;
 
 	/**
 	 * Enums are a little different: they are composed as follows:
@@ -67,7 +76,7 @@ class AvailableCommandsPacket extends DataPacket{
 	public const ARG_FLAG_ENUM = 0x200000;
 
 	/**
-	 * This is used for /xp <level: int>L.
+	 * This is used for /xp <level: int>L. It can only be applied to integer parameters.
 	 */
 	public const ARG_FLAG_POSTFIX = 0x1000000;
 
@@ -101,6 +110,13 @@ class AvailableCommandsPacket extends DataPacket{
 	 */
 	public $commandData = [];
 
+	/**
+	 * @var CommandEnum[]
+	 * List of dynamic command enums, also referred to as "soft" enums. These can by dynamically updated mid-game
+	 * without resending this packet.
+	 */
+	public $softEnums = [];
+
 	protected function decodePayload(){
 		for($i = 0, $this->enumValuesCount = $this->getUnsignedVarInt(); $i < $this->enumValuesCount; ++$i){
 			$this->enumValues[] = $this->getString();
@@ -117,6 +133,10 @@ class AvailableCommandsPacket extends DataPacket{
 		for($i = 0, $count = $this->getUnsignedVarInt(); $i < $count; ++$i){
 			$this->commandData[] = $this->getCommandData();
 		}
+
+		for($i = 0, $count = $this->getUnsignedVarInt(); $i < $count; ++$i){
+			$this->softEnums[] = $this->getSoftEnum();
+		}
 	}
 
 	protected function getEnum() : CommandEnum{
@@ -126,6 +146,18 @@ class AvailableCommandsPacket extends DataPacket{
 		for($i = 0, $count = $this->getUnsignedVarInt(); $i < $count; ++$i){
 			//Get the enum value from the initial pile of mess
 			$retval->enumValues[] = $this->enumValues[$this->getEnumValueIndex()];
+		}
+
+		return $retval;
+	}
+
+	protected function getSoftEnum() : CommandEnum{
+		$retval = new CommandEnum();
+		$retval->enumName = $this->getString();
+
+		for($i = 0, $count = $this->getUnsignedVarInt(); $i < $count; ++$i){
+			//Get the enum value from the initial pile of mess
+			$retval->enumValues[] = $this->getString();
 		}
 
 		return $retval;
@@ -142,6 +174,15 @@ class AvailableCommandsPacket extends DataPacket{
 				throw new \InvalidStateException("Enum value '$value' not found");
 			}
 			$this->putEnumValueIndex($index);
+		}
+	}
+
+	protected function putSoftEnum(CommandEnum $enum) : void{
+		$this->putString($enum->enumName);
+
+		$this->putUnsignedVarInt(count($enum->enumValues));
+		foreach($enum->enumValues as $value){
+			$this->putString($value);
 		}
 	}
 
@@ -183,13 +224,17 @@ class AvailableCommandsPacket extends DataPacket{
 				if($parameter->paramType & self::ARG_FLAG_ENUM){
 					$index = ($parameter->paramType & 0xffff);
 					$parameter->enum = $this->enums[$index] ?? null;
-
-					assert($parameter->enum !== null, "expected enum at $index, but got none");
-				}elseif(($parameter->paramType & self::ARG_FLAG_VALID) === 0){ //postfix (guessing)
+					if($parameter->enum === null){
+						throw new \UnexpectedValueException("expected enum at $index, but got none");
+					}
+				}elseif($parameter->paramType & self::ARG_FLAG_POSTFIX){
 					$index = ($parameter->paramType & 0xffff);
 					$parameter->postfix = $this->postfixes[$index] ?? null;
-
-					assert($parameter->postfix !== null, "expected postfix at $index, but got none");
+					if($parameter->postfix === null){
+						throw new \UnexpectedValueException("expected postfix at $index, but got none");
+					}
+				}elseif(($parameter->paramType & self::ARG_FLAG_VALID) === 0){
+					throw new \UnexpectedValueException("Invalid parameter type 0x" . dechex($parameter->paramType));
 				}
 
 				$retval->overloads[$overloadIndex][$paramIndex] = $parameter;
@@ -225,7 +270,7 @@ class AvailableCommandsPacket extends DataPacket{
 					if($key === false){
 						throw new \InvalidStateException("Postfix '$parameter->postfix' not in postfixes array");
 					}
-					$type = $parameter->paramType << 24 | $key;
+					$type = self::ARG_FLAG_POSTFIX | $key;
 				}else{
 					$type = $parameter->paramType;
 				}
@@ -255,22 +300,21 @@ class AvailableCommandsPacket extends DataPacket{
 					return "string";
 				case self::ARG_TYPE_POSITION:
 					return "xyz";
+				case self::ARG_TYPE_MESSAGE:
+					return "message";
 				case self::ARG_TYPE_RAWTEXT:
-					return "rawtext";
-				case self::ARG_TYPE_TEXT:
 					return "text";
 				case self::ARG_TYPE_JSON:
 					return "json";
 				case self::ARG_TYPE_COMMAND:
 					return "command";
 			}
-		}elseif($argtype !== 0){
-			//guessed
-			$baseType = $argtype >> 24;
-			$typeName = $this->argTypeToString(self::ARG_FLAG_VALID | $baseType);
+		}elseif($argtype & self::ARG_FLAG_POSTFIX){
 			$postfix = $this->postfixes[$argtype & 0xffff];
 
-			return $typeName . " (postfix $postfix)";
+			return "int (postfix $postfix)";
+		}else{
+			throw new \UnexpectedValueException("Unknown arg type 0x" . dechex($argtype));
 		}
 
 		return "unknown ($argtype)";
@@ -292,7 +336,7 @@ class AvailableCommandsPacket extends DataPacket{
 			foreach($commandData->overloads as $overload){
 				/**
 				 * @var CommandParameter[] $overload
-				 * @var CommandParameter $parameter
+				 * @var CommandParameter   $parameter
 				 */
 				foreach($overload as $parameter){
 					if($parameter->enum !== null){
@@ -309,13 +353,13 @@ class AvailableCommandsPacket extends DataPacket{
 			}
 		}
 
-		$this->enumValues = array_map('strval', array_keys($enumValuesMap)); //stupid PHP key casting D:
+		$this->enumValues = array_map('\strval', array_keys($enumValuesMap)); //stupid PHP key casting D:
 		$this->putUnsignedVarInt($this->enumValuesCount = count($this->enumValues));
 		foreach($this->enumValues as $enumValue){
 			$this->putString($enumValue);
 		}
 
-		$this->postfixes = array_map('strval', array_keys($postfixesMap));
+		$this->postfixes = array_map('\strval', array_keys($postfixesMap));
 		$this->putUnsignedVarInt(count($this->postfixes));
 		foreach($this->postfixes as $postfix){
 			$this->putString($postfix);
@@ -332,10 +376,14 @@ class AvailableCommandsPacket extends DataPacket{
 		foreach($this->commandData as $data){
 			$this->putCommandData($data);
 		}
+
+		$this->putUnsignedVarInt(count($this->softEnums));
+		foreach($this->softEnums as $enum){
+			$this->putSoftEnum($enum);
+		}
 	}
 
 	public function handle(NetworkSession $session) : bool{
 		return $session->handleAvailableCommands($this);
 	}
-
 }

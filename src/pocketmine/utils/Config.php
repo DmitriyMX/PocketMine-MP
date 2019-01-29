@@ -23,9 +23,36 @@ declare(strict_types=1);
 
 namespace pocketmine\utils;
 
-use pocketmine\scheduler\FileWriteTask;
-use pocketmine\Server;
-
+use function array_change_key_case;
+use function array_keys;
+use function array_pop;
+use function array_shift;
+use function basename;
+use function count;
+use function date;
+use function explode;
+use function file_exists;
+use function file_get_contents;
+use function file_put_contents;
+use function implode;
+use function is_array;
+use function is_bool;
+use function json_decode;
+use function json_encode;
+use function preg_match_all;
+use function preg_replace;
+use function serialize;
+use function str_replace;
+use function strlen;
+use function strtolower;
+use function substr;
+use function trim;
+use function unserialize;
+use function yaml_emit;
+use function yaml_parse;
+use const CASE_LOWER;
+use const JSON_BIGINT_AS_STRING;
+use const JSON_PRETTY_PRINT;
 
 /**
  * Config Class for simple config manipulation of multiple formats.
@@ -111,13 +138,13 @@ class Config{
 	 * @return string
 	 */
 	public static function fixYAMLIndexes(string $str) : string{
-		return preg_replace("#^([ ]*)([a-zA-Z_]{1}[ ]*)\\:$#m", "$1\"$2\":", $str);
+		return preg_replace("#^( *)(y|Y|yes|Yes|YES|n|N|no|No|NO|true|True|TRUE|false|False|FALSE|on|On|ON|off|Off|OFF)( *)\:#m", "$1\"$2\"$3:", $str);
 	}
 
 	/**
-	 * @param       $file
-	 * @param int   $type
-	 * @param array $default
+	 * @param string $file
+	 * @param int    $type
+	 * @param array  $default
 	 *
 	 * @return bool
 	 */
@@ -144,7 +171,6 @@ class Config{
 				$content = file_get_contents($this->file);
 				switch($this->type){
 					case Config::PROPERTIES:
-					case Config::CNF:
 						$this->parseProperties($content);
 						break;
 					case Config::JSON:
@@ -187,47 +213,32 @@ class Config{
 	}
 
 	/**
-	 * @param bool $async
-	 *
 	 * @return bool
 	 */
-	public function save(bool $async = false) : bool{
+	public function save() : bool{
 		if($this->correct){
-			try{
-				$content = null;
-				switch($this->type){
-					case Config::PROPERTIES:
-					case Config::CNF:
-						$content = $this->writeProperties();
-						break;
-					case Config::JSON:
-						$content = json_encode($this->config, $this->jsonOptions);
-						break;
-					case Config::YAML:
-						$content = yaml_emit($this->config, YAML_UTF8_ENCODING);
-						break;
-					case Config::SERIALIZED:
-						$content = serialize($this->config);
-						break;
-					case Config::ENUM:
-						$content = implode("\r\n", array_keys($this->config));
-						break;
-					default:
-						throw new \InvalidStateException("Config type is unknown, has not been set or not detected");
-				}
-
-				if($async){
-					Server::getInstance()->getScheduler()->scheduleAsyncTask(new FileWriteTask($this->file, $content));
-				}else{
-					file_put_contents($this->file, $content);
-				}
-			}catch(\Throwable $e){
-				$logger = Server::getInstance()->getLogger();
-				$logger->critical("Could not save Config " . $this->file . ": " . $e->getMessage());
-				if(\pocketmine\DEBUG > 1){
-					$logger->logException($e);
-				}
+			$content = null;
+			switch($this->type){
+				case Config::PROPERTIES:
+					$content = $this->writeProperties();
+					break;
+				case Config::JSON:
+					$content = json_encode($this->config, $this->jsonOptions);
+					break;
+				case Config::YAML:
+					$content = yaml_emit($this->config, YAML_UTF8_ENCODING);
+					break;
+				case Config::SERIALIZED:
+					$content = serialize($this->config);
+					break;
+				case Config::ENUM:
+					$content = implode("\r\n", array_keys($this->config));
+					break;
+				default:
+					throw new \InvalidStateException("Config type is unknown, has not been set or not detected");
 			}
+
+			file_put_contents($this->file, $content);
 
 			$this->changed = false;
 
@@ -241,6 +252,7 @@ class Config{
 	 * Sets the options for the JSON encoding when saving
 	 *
 	 * @param int $options
+	 *
 	 * @return Config $this
 	 * @throws \RuntimeException if the Config is not in JSON
 	 * @see json_encode
@@ -259,6 +271,7 @@ class Config{
 	 * Enables the given option in addition to the currently set JSON options
 	 *
 	 * @param int $option
+	 *
 	 * @return Config $this
 	 * @throws \RuntimeException if the Config is not in JSON
 	 * @see json_encode
@@ -277,6 +290,7 @@ class Config{
 	 * Disables the given option for the JSON encoding when saving
 	 *
 	 * @param int $option
+	 *
 	 * @return Config $this
 	 * @throws \RuntimeException if the Config is not in JSON
 	 * @see json_encode
@@ -306,7 +320,7 @@ class Config{
 	}
 
 	/**
-	 * @param $k
+	 * @param string $k
 	 *
 	 * @return bool|mixed
 	 */
@@ -315,15 +329,15 @@ class Config{
 	}
 
 	/**
-	 * @param $k
-	 * @param $v
+	 * @param string $k
+	 * @param mixed  $v
 	 */
 	public function __set($k, $v){
 		$this->set($k, $v);
 	}
 
 	/**
-	 * @param $k
+	 * @param string $k
 	 *
 	 * @return bool
 	 */
@@ -332,15 +346,15 @@ class Config{
 	}
 
 	/**
-	 * @param $k
+	 * @param string $k
 	 */
 	public function __unset($k){
 		$this->remove($k);
 	}
 
 	/**
-	 * @param $key
-	 * @param $value
+	 * @param string $key
+	 * @param mixed  $value
 	 */
 	public function setNested($key, $value){
 		$vars = explode(".", $key);
@@ -366,8 +380,8 @@ class Config{
 	}
 
 	/**
-	 * @param       $key
-	 * @param mixed $default
+	 * @param string $key
+	 * @param mixed  $default
 	 *
 	 * @return mixed
 	 */
@@ -418,8 +432,8 @@ class Config{
 	}
 
 	/**
-	 * @param       $k
-	 * @param mixed $default
+	 * @param string $k
+	 * @param mixed  $default
 	 *
 	 * @return bool|mixed
 	 */
@@ -450,8 +464,8 @@ class Config{
 	}
 
 	/**
-	 * @param      $k
-	 * @param bool $lowercase If set, searches Config in single-case / lowercase.
+	 * @param string $k
+	 * @param bool   $lowercase If set, searches Config in single-case / lowercase.
 	 *
 	 * @return bool
 	 */
@@ -466,7 +480,7 @@ class Config{
 	}
 
 	/**
-	 * @param $k
+	 * @param string $k
 	 */
 	public function remove($k){
 		unset($this->config[$k]);
@@ -550,7 +564,7 @@ class Config{
 	 * @param string $content
 	 */
 	private function parseProperties(string $content){
-		if(preg_match_all('/([a-zA-Z0-9\-_\.]*)=([^\r\n]*)/u', $content, $matches) > 0){ //false or 0 matches
+		if(preg_match_all('/^\s*([a-zA-Z0-9\-_\.]+)[ \t]*=([^\r\n]*)/um', $content, $matches) > 0){ //false or 0 matches
 			foreach($matches[1] as $i => $k){
 				$v = trim($matches[2][$i]);
 				switch(strtolower($v)){
@@ -572,5 +586,4 @@ class Config{
 			}
 		}
 	}
-
 }

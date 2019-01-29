@@ -24,7 +24,6 @@ declare(strict_types=1);
 namespace pocketmine\entity\object;
 
 use pocketmine\entity\Entity;
-use pocketmine\event\entity\EntityDamageEvent;
 use pocketmine\event\entity\ItemDespawnEvent;
 use pocketmine\event\entity\ItemSpawnEvent;
 use pocketmine\event\inventory\InventoryPickupItemEvent;
@@ -32,6 +31,7 @@ use pocketmine\item\Item;
 use pocketmine\network\mcpe\protocol\AddItemEntityPacket;
 use pocketmine\network\mcpe\protocol\TakeItemEntityPacket;
 use pocketmine\Player;
+use function get_class;
 
 class ItemEntity extends Entity{
 	public const NETWORK_ID = self::ITEM;
@@ -54,7 +54,10 @@ class ItemEntity extends Entity{
 
 	public $canCollide = false;
 
-	protected function initEntity(){
+	/** @var int */
+	protected $age = 0;
+
+	protected function initEntity() : void{
 		parent::initEntity();
 
 		$this->setMaxHealth(5);
@@ -67,26 +70,16 @@ class ItemEntity extends Entity{
 
 		$itemTag = $this->namedtag->getCompoundTag("Item");
 		if($itemTag === null){
-			$this->close();
-			return;
+			throw new \UnexpectedValueException("Invalid " . get_class($this) . " entity: expected \"Item\" NBT tag not found");
 		}
 
 		$this->item = Item::nbtDeserialize($itemTag);
-
-
-		$this->server->getPluginManager()->callEvent(new ItemSpawnEvent($this));
-	}
-
-	public function attack(EntityDamageEvent $source){
-		if(
-			$source->getCause() === EntityDamageEvent::CAUSE_VOID or
-			$source->getCause() === EntityDamageEvent::CAUSE_FIRE_TICK or
-			$source->getCause() === EntityDamageEvent::CAUSE_LAVA or
-			$source->getCause() === EntityDamageEvent::CAUSE_ENTITY_EXPLOSION or
-			$source->getCause() === EntityDamageEvent::CAUSE_BLOCK_EXPLOSION
-		){
-			parent::attack($source);
+		if($this->item->isNull()){
+			throw new \UnexpectedValueException("Item for " . get_class($this) . " is invalid");
 		}
+
+
+		(new ItemSpawnEvent($this))->call();
 	}
 
 	public function entityBaseTick(int $tickDiff = 1) : bool{
@@ -96,16 +89,16 @@ class ItemEntity extends Entity{
 
 		$hasUpdate = parent::entityBaseTick($tickDiff);
 
-		if(!$this->isFlaggedForDespawn()){
-			if($this->pickupDelay > 0 and $this->pickupDelay < 32767){ //Infinite delay
-				$this->pickupDelay -= $tickDiff;
-				if($this->pickupDelay < 0){
-					$this->pickupDelay = 0;
-				}
+		if(!$this->isFlaggedForDespawn() and $this->pickupDelay > -1 and $this->pickupDelay < 32767){ //Infinite delay
+			$this->pickupDelay -= $tickDiff;
+			if($this->pickupDelay < 0){
+				$this->pickupDelay = 0;
 			}
 
+			$this->age += $tickDiff;
 			if($this->age > 6000){
-				$this->server->getPluginManager()->callEvent($ev = new ItemDespawnEvent($this));
+				$ev = new ItemDespawnEvent($this);
+				$ev->call();
 				if($ev->isCancelled()){
 					$this->age = 0;
 				}else{
@@ -113,13 +106,12 @@ class ItemEntity extends Entity{
 					$hasUpdate = true;
 				}
 			}
-
 		}
 
 		return $hasUpdate;
 	}
 
-	protected function tryChangeMovement(){
+	protected function tryChangeMovement() : void{
 		$this->checkObstruction($this->x, $this->y, $this->z);
 		parent::tryChangeMovement();
 	}
@@ -128,7 +120,7 @@ class ItemEntity extends Entity{
 		return true;
 	}
 
-	public function saveNBT(){
+	public function saveNBT() : void{
 		parent::saveNBT();
 		$this->namedtag->setTag($this->item->nbtSerialize(-1, "Item"));
 		$this->namedtag->setShort("Health", (int) $this->getHealth());
@@ -167,7 +159,7 @@ class ItemEntity extends Entity{
 	/**
 	 * @param int $delay
 	 */
-	public function setPickupDelay(int $delay){
+	public function setPickupDelay(int $delay) : void{
 		$this->pickupDelay = $delay;
 	}
 
@@ -181,7 +173,7 @@ class ItemEntity extends Entity{
 	/**
 	 * @param string $owner
 	 */
-	public function setOwner(string $owner){
+	public function setOwner(string $owner) : void{
 		$this->owner = $owner;
 	}
 
@@ -195,7 +187,7 @@ class ItemEntity extends Entity{
 	/**
 	 * @param string $thrower
 	 */
-	public function setThrower(string $thrower){
+	public function setThrower(string $thrower) : void{
 		$this->thrower = $thrower;
 	}
 
@@ -210,19 +202,20 @@ class ItemEntity extends Entity{
 		$player->dataPacket($pk);
 	}
 
-	public function onCollideWithPlayer(Player $player){
-		if($this->getPickupDelay() > 0){
+	public function onCollideWithPlayer(Player $player) : void{
+		if($this->getPickupDelay() !== 0){
 			return;
 		}
 
 		$item = $this->getItem();
 		$playerInventory = $player->getInventory();
 
-		if(!($item instanceof Item) or ($player->isSurvival() and !$playerInventory->canAddItem($item))){
+		if($player->isSurvival() and !$playerInventory->canAddItem($item)){
 			return;
 		}
 
-		$this->server->getPluginManager()->callEvent($ev = new InventoryPickupItemEvent($playerInventory, $this));
+		$ev = new InventoryPickupItemEvent($playerInventory, $this);
+		$ev->call();
 		if($ev->isCancelled()){
 			return;
 		}

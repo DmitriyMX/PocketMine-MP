@@ -28,6 +28,7 @@ use pocketmine\item\ItemFactory;
 use pocketmine\item\TieredTool;
 use pocketmine\math\Vector3;
 use pocketmine\Player;
+use function mt_rand;
 
 class RedstoneOre extends Solid{
 
@@ -50,7 +51,8 @@ class RedstoneOre extends Solid{
 	}
 
 	public function onActivate(Item $item, Player $player = null) : bool{
-		return $this->getLevel()->setBlock($this, BlockFactory::get(Block::GLOWING_REDSTONE_ORE, $this->meta));
+		$this->getLevel()->setBlock($this, BlockFactory::get(Block::GLOWING_REDSTONE_ORE, $this->meta));
+		return false; //this shouldn't prevent block placement
 	}
 
 	public function onNearbyBlockChange() : void{
@@ -69,5 +71,9 @@ class RedstoneOre extends Solid{
 		return [
 			ItemFactory::get(Item::REDSTONE_DUST, 0, mt_rand(4, 5))
 		];
+	}
+
+	protected function getXpDropAmount() : int{
+		return mt_rand(1, 5);
 	}
 }

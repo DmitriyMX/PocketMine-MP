@@ -44,6 +44,7 @@ use pocketmine\network\mcpe\protocol\InteractPacket;
 use pocketmine\network\mcpe\protocol\InventoryTransactionPacket;
 use pocketmine\network\mcpe\protocol\ItemFrameDropItemPacket;
 use pocketmine\network\mcpe\protocol\LevelSoundEventPacket;
+use pocketmine\network\mcpe\protocol\LevelSoundEventPacketV1;
 use pocketmine\network\mcpe\protocol\LoginPacket;
 use pocketmine\network\mcpe\protocol\MapInfoRequestPacket;
 use pocketmine\network\mcpe\protocol\MobArmorEquipmentPacket;
@@ -58,6 +59,7 @@ use pocketmine\network\mcpe\protocol\RequestChunkRadiusPacket;
 use pocketmine\network\mcpe\protocol\ResourcePackChunkRequestPacket;
 use pocketmine\network\mcpe\protocol\ResourcePackClientResponsePacket;
 use pocketmine\network\mcpe\protocol\ServerSettingsRequestPacket;
+use pocketmine\network\mcpe\protocol\SetLocalPlayerAsInitializedPacket;
 use pocketmine\network\mcpe\protocol\SetPlayerGameTypePacket;
 use pocketmine\network\mcpe\protocol\ShowCreditsPacket;
 use pocketmine\network\mcpe\protocol\SpawnExperienceOrbPacket;
@@ -65,6 +67,15 @@ use pocketmine\network\mcpe\protocol\TextPacket;
 use pocketmine\Player;
 use pocketmine\Server;
 use pocketmine\timings\Timings;
+use function bin2hex;
+use function implode;
+use function json_decode;
+use function json_last_error_msg;
+use function preg_match;
+use function preg_split;
+use function strlen;
+use function substr;
+use function trim;
 
 class PlayerNetworkSessionAdapter extends NetworkSession{
 
@@ -79,6 +90,10 @@ class PlayerNetworkSessionAdapter extends NetworkSession{
 	}
 
 	public function handleDataPacket(DataPacket $packet){
+		if(!$this->player->isConnected()){
+			return;
+		}
+
 		$timings = Timings::getReceiveDataPacketTimings($packet);
 		$timings->startTiming();
 
@@ -88,7 +103,8 @@ class PlayerNetworkSessionAdapter extends NetworkSession{
 			$this->server->getLogger()->debug("Still " . strlen($remains) . " bytes unread in " . $packet->getName() . ": 0x" . bin2hex($remains));
 		}
 
-		$this->server->getPluginManager()->callEvent($ev = new DataPacketReceiveEvent($this->player, $packet));
+		$ev = new DataPacketReceiveEvent($this->player, $packet);
+		$ev->call();
 		if(!$ev->isCancelled() and !$packet->handle($this)){
 			$this->server->getLogger()->debug("Unhandled " . $packet->getName() . " received from " . $this->player->getName() . ": 0x" . bin2hex($packet->buffer));
 		}
@@ -120,8 +136,8 @@ class PlayerNetworkSessionAdapter extends NetworkSession{
 		return $this->player->handleMovePlayer($packet);
 	}
 
-	public function handleLevelSoundEvent(LevelSoundEventPacket $packet) : bool{
-		return $this->player->handleLevelSoundEvent($packet);
+	public function handleLevelSoundEventPacketV1(LevelSoundEventPacketV1 $packet) : bool{
+		return true; //useless leftover from 1.8
 	}
 
 	public function handleEntityEvent(EntityEventPacket $packet) : bool{
@@ -239,10 +255,49 @@ class PlayerNetworkSessionAdapter extends NetworkSession{
 	}
 
 	public function handleModalFormResponse(ModalFormResponsePacket $packet) : bool{
-		return false; //TODO: GUI stuff
+		return $this->player->onFormSubmit($packet->formId, self::stupid_json_decode($packet->formData, true));
+	}
+
+	/**
+	 * Hack to work around a stupid bug in Minecraft W10 which causes empty strings to be sent unquoted in form responses.
+	 *
+	 * @param string $json
+	 * @param bool   $assoc
+	 *
+	 * @return mixed
+	 */
+	private static function stupid_json_decode(string $json, bool $assoc = false){
+		if(preg_match('/^\[(.+)\]$/s', $json, $matches) > 0){
+			$parts = preg_split('/(?:"(?:\\"|[^"])*"|)\K(,)/', $matches[1]); //Splits on commas not inside quotes, ignoring escaped quotes
+			foreach($parts as $k => $part){
+				$part = trim($part);
+				if($part === ""){
+					$part = "\"\"";
+				}
+				$parts[$k] = $part;
+			}
+
+			$fixed = "[" . implode(",", $parts) . "]";
+			if(($ret = json_decode($fixed, $assoc)) === null){
+				throw new \InvalidArgumentException("Failed to fix JSON: " . json_last_error_msg() . "(original: $json, modified: $fixed)");
+			}
+
+			return $ret;
+		}
+
+		return json_decode($json, $assoc);
 	}
 
 	public function handleServerSettingsRequest(ServerSettingsRequestPacket $packet) : bool{
 		return false; //TODO: GUI stuff
+	}
+
+	public function handleSetLocalPlayerAsInitialized(SetLocalPlayerAsInitializedPacket $packet) : bool{
+		$this->player->doFirstSpawn();
+		return true;
+	}
+
+	public function handleLevelSoundEvent(LevelSoundEventPacket $packet) : bool{
+		return $this->player->handleLevelSoundEvent($packet);
 	}
 }

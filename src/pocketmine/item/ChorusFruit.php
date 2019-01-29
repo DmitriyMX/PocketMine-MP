@@ -27,6 +27,9 @@ use pocketmine\block\Liquid;
 use pocketmine\entity\Living;
 use pocketmine\level\sound\EndermanTeleportSound;
 use pocketmine\math\Vector3;
+use function assert;
+use function min;
+use function mt_rand;
 
 class ChorusFruit extends Food{
 
@@ -47,16 +50,16 @@ class ChorusFruit extends Food{
 	}
 
 	public function onConsume(Living $consumer){
+		$level = $consumer->getLevel();
+		assert($level !== null);
+
 		$minX = $consumer->getFloorX() - 8;
-		$minY = $consumer->getFloorY() - 8;
+		$minY = min($consumer->getFloorY(), $consumer->getLevel()->getWorldHeight()) - 8;
 		$minZ = $consumer->getFloorZ() - 8;
 
 		$maxX = $minX + 16;
 		$maxY = $minY + 16;
 		$maxZ = $minZ + 16;
-
-		$level = $consumer->getLevel();
-		assert($level !== null);
 
 		for($attempts = 0; $attempts < 16; ++$attempts){
 			$x = mt_rand($minX, $maxX);

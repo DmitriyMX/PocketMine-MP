@@ -29,7 +29,12 @@ use pocketmine\network\mcpe\protocol\BatchPacket;
 use pocketmine\network\mcpe\protocol\CraftingDataPacket;
 use pocketmine\Server;
 use pocketmine\timings\Timings;
-use pocketmine\utils\Config;
+use function array_map;
+use function file_get_contents;
+use function json_decode;
+use function json_encode;
+use function usort;
+use const DIRECTORY_SEPARATOR;
 
 class CraftingManager{
 	/** @var ShapedRecipe[][] */
@@ -47,9 +52,9 @@ class CraftingManager{
 	}
 
 	public function init() : void{
-		$recipes = new Config(\pocketmine\RESOURCE_PATH . "recipes.json", Config::JSON, []);
+		$recipes = json_decode(file_get_contents(\pocketmine\RESOURCE_PATH . "vanilla" . DIRECTORY_SEPARATOR . "recipes.json"), true);
 
-		foreach($recipes->getAll() as $recipe){
+		foreach($recipes as $recipe){
 			switch($recipe["type"]){
 				case 0:
 					$this->registerRecipe(new ShapelessRecipe(
@@ -291,5 +296,4 @@ class CraftingManager{
 	public function registerRecipe(Recipe $recipe) : void{
 		$recipe->registerToCraftingManager($this);
 	}
-
 }

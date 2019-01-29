@@ -25,6 +25,8 @@ namespace pocketmine\item;
 
 use pocketmine\item\enchantment\Enchantment;
 use pocketmine\nbt\tag\ByteTag;
+use function lcg_value;
+use function min;
 
 abstract class Durable extends Item{
 
@@ -38,6 +40,7 @@ abstract class Durable extends Item{
 
 	/**
 	 * Sets whether the item will take damage when used.
+	 *
 	 * @param bool $value
 	 */
 	public function setUnbreakable(bool $value = true){
@@ -46,6 +49,7 @@ abstract class Durable extends Item{
 
 	/**
 	 * Applies damage to the item.
+	 *
 	 * @param int $amount
 	 *
 	 * @return bool if any damage was applied to the item

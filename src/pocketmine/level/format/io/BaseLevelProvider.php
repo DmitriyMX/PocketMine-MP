@@ -24,12 +24,17 @@ declare(strict_types=1);
 namespace pocketmine\level\format\io;
 
 use pocketmine\level\format\Chunk;
-use pocketmine\level\generator\Generator;
+use pocketmine\level\format\io\exception\CorruptedChunkException;
+use pocketmine\level\format\io\exception\UnsupportedChunkFormatException;
 use pocketmine\level\LevelException;
 use pocketmine\math\Vector3;
 use pocketmine\nbt\BigEndianNBTStream;
 use pocketmine\nbt\tag\CompoundTag;
 use pocketmine\nbt\tag\StringTag;
+use function file_exists;
+use function file_get_contents;
+use function file_put_contents;
+use function mkdir;
 
 abstract class BaseLevelProvider implements LevelProvider{
 	/** @var string */
@@ -60,12 +65,44 @@ abstract class BaseLevelProvider implements LevelProvider{
 
 	protected function fixLevelData() : void{
 		if(!$this->levelData->hasTag("generatorName", StringTag::class)){
-			$this->levelData->setString("generatorName", (string) Generator::getGenerator("DEFAULT"), true);
+			$this->levelData->setString("generatorName", "default", true);
+		}elseif(($generatorName = self::hackyFixForGeneratorClasspathInLevelDat($this->levelData->getString("generatorName"))) !== null){
+			$this->levelData->setString("generatorName", $generatorName);
 		}
 
 		if(!$this->levelData->hasTag("generatorOptions", StringTag::class)){
 			$this->levelData->setString("generatorOptions", "");
 		}
+	}
+
+	/**
+	 * Hack to fix worlds broken previously by older versions of PocketMine-MP which incorrectly saved classpaths of
+	 * generators into level.dat on imported (not generated) worlds.
+	 *
+	 * This should only have affected leveldb worlds as far as I know, because PC format worlds include the
+	 * generatorName tag by default. However, MCPE leveldb ones didn't, and so they would get filled in with something
+	 * broken.
+	 *
+	 * This bug took a long time to get found because previously the generator manager would just return the default
+	 * generator silently on failure to identify the correct generator, which caused lots of unexpected bugs.
+	 *
+	 * Only classnames which were written into the level.dat from "fixing" the level data are included here. These are
+	 * hardcoded to avoid problems fixing broken worlds in the future if these classes get moved, renamed or removed.
+	 *
+	 * @param string $className Classname saved in level.dat
+	 *
+	 * @return null|string Name of the correct generator to replace the broken value
+	 */
+	protected static function hackyFixForGeneratorClasspathInLevelDat(string $className) : ?string{
+		//THESE ARE DELIBERATELY HARDCODED, DO NOT CHANGE!
+		switch($className){
+			case 'pocketmine\level\generator\normal\Normal':
+				return "normal";
+			case 'pocketmine\level\generator\Flat':
+				return "flat";
+		}
+
+		return null;
 	}
 
 	public function getPath() : string{
@@ -121,6 +158,14 @@ abstract class BaseLevelProvider implements LevelProvider{
 		file_put_contents($this->getPath() . "level.dat", $buffer);
 	}
 
+	/**
+	 * @param int $chunkX
+	 * @param int $chunkZ
+	 *
+	 * @return Chunk|null
+	 * @throws CorruptedChunkException
+	 * @throws UnsupportedChunkFormatException
+	 */
 	public function loadChunk(int $chunkX, int $chunkZ) : ?Chunk{
 		return $this->readChunk($chunkX, $chunkZ);
 	}
@@ -132,6 +177,14 @@ abstract class BaseLevelProvider implements LevelProvider{
 		$this->writeChunk($chunk);
 	}
 
+	/**
+	 * @param int $chunkX
+	 * @param int $chunkZ
+	 *
+	 * @return Chunk|null
+	 * @throws UnsupportedChunkFormatException
+	 * @throws CorruptedChunkException
+	 */
 	abstract protected function readChunk(int $chunkX, int $chunkZ) : ?Chunk;
 
 	abstract protected function writeChunk(Chunk $chunk) : void;

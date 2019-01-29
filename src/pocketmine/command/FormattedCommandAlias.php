@@ -23,9 +23,13 @@ declare(strict_types=1);
 
 namespace pocketmine\command;
 
-use pocketmine\lang\TranslationContainer;
 use pocketmine\Server;
 use pocketmine\utils\TextFormat;
+use function count;
+use function ord;
+use function strlen;
+use function strpos;
+use function substr;
 
 class FormattedCommandAlias extends Command{
 	private $formatStrings = [];
@@ -47,20 +51,14 @@ class FormattedCommandAlias extends Command{
 		foreach($this->formatStrings as $formatString){
 			try{
 				$commands[] = $this->buildCommand($formatString, $args);
-			}catch(\Throwable $e){
-				if($e instanceof \InvalidArgumentException){
-					$sender->sendMessage(TextFormat::RED . $e->getMessage());
-				}else{
-					$sender->sendMessage(new TranslationContainer(TextFormat::RED . "%commands.generic.exception"));
-					$sender->getServer()->getLogger()->logException($e);
-				}
-
+			}catch(\InvalidArgumentException $e){
+				$sender->sendMessage(TextFormat::RED . $e->getMessage());
 				return false;
 			}
 		}
 
 		foreach($commands as $command){
-			$result |= Server::getInstance()->dispatchCommand($sender, $command);
+			$result |= Server::getInstance()->dispatchCommand($sender, $command, true);
 		}
 
 		return (bool) $result;
@@ -155,5 +153,4 @@ class FormattedCommandAlias extends Command{
 	private static function inRange(int $i, int $j, int $k) : bool{
 		return $i >= $j and $i <= $k;
 	}
-
 }

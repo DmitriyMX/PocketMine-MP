@@ -27,7 +27,7 @@ use pocketmine\event\block\BlockSpreadEvent;
 use pocketmine\item\Item;
 use pocketmine\item\ItemFactory;
 use pocketmine\math\Vector3;
-use pocketmine\Server;
+use function mt_rand;
 
 class Mycelium extends Solid{
 
@@ -67,7 +67,8 @@ class Mycelium extends Solid{
 		$block = $this->getLevel()->getBlockAt($x, $y, $z);
 		if($block->getId() === Block::DIRT){
 			if($block->getSide(Vector3::SIDE_UP) instanceof Transparent){
-				Server::getInstance()->getPluginManager()->callEvent($ev = new BlockSpreadEvent($block, $this, BlockFactory::get(Block::MYCELIUM)));
+				$ev = new BlockSpreadEvent($block, $this, BlockFactory::get(Block::MYCELIUM));
+				$ev->call();
 				if(!$ev->isCancelled()){
 					$this->getLevel()->setBlock($block, $ev->getNewState());
 				}

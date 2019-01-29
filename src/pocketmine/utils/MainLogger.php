@@ -26,6 +26,33 @@ namespace pocketmine\utils;
 use LogLevel;
 use pocketmine\Thread;
 use pocketmine\Worker;
+use function fclose;
+use function fopen;
+use function fwrite;
+use function get_class;
+use function is_resource;
+use function preg_replace;
+use function sprintf;
+use function time;
+use function touch;
+use function trim;
+use const E_COMPILE_ERROR;
+use const E_COMPILE_WARNING;
+use const E_CORE_ERROR;
+use const E_CORE_WARNING;
+use const E_DEPRECATED;
+use const E_ERROR;
+use const E_NOTICE;
+use const E_PARSE;
+use const E_RECOVERABLE_ERROR;
+use const E_STRICT;
+use const E_USER_DEPRECATED;
+use const E_USER_ERROR;
+use const E_USER_NOTICE;
+use const E_USER_WARNING;
+use const E_WARNING;
+use const PHP_EOL;
+use const PTHREADS_INHERIT_NONE;
 
 class MainLogger extends \AttachableThreadedLogger{
 
@@ -42,9 +69,18 @@ class MainLogger extends \AttachableThreadedLogger{
 	/** @var bool */
 	private $syncFlush = false;
 
+	/** @var string */
+	private $format = TextFormat::AQUA . "[%s] " . TextFormat::RESET . "%s[%s/%s]: %s" . TextFormat::RESET;
+
+	/** @var bool */
+	private $mainThreadHasFormattingCodes = false;
+
+	/** @var string */
+	private $timezone;
+
 	/**
 	 * @param string $logFile
-	 * @param bool $logDebug
+	 * @param bool   $logDebug
 	 *
 	 * @throws \RuntimeException
 	 */
@@ -57,7 +93,12 @@ class MainLogger extends \AttachableThreadedLogger{
 		$this->logFile = $logFile;
 		$this->logDebug = $logDebug;
 		$this->logStream = new \Threaded;
-		$this->start();
+
+		//Child threads may not inherit command line arguments, so if there's an override it needs to be recorded here
+		$this->mainThreadHasFormattingCodes = Terminal::hasFormattingCodes();
+		$this->timezone = Timezone::get();
+
+		$this->start(PTHREADS_INHERIT_NONE);
 	}
 
 	/**
@@ -65,6 +106,14 @@ class MainLogger extends \AttachableThreadedLogger{
 	 */
 	public static function getLogger() : MainLogger{
 		return static::$logger;
+	}
+
+	/**
+	 * Returns whether a MainLogger instance is statically registered on this thread.
+	 * @return bool
+	 */
+	public static function isRegisteredStatic() : bool{
+		return static::$logger !== null;
 	}
 
 	/**
@@ -77,6 +126,32 @@ class MainLogger extends \AttachableThreadedLogger{
 		if(static::$logger === null){
 			static::$logger = $this;
 		}
+	}
+
+	/**
+	 * Returns the current logger format used for console output.
+	 *
+	 * @return string
+	 */
+	public function getFormat() : string{
+		return $this->format;
+	}
+
+	/**
+	 * Sets the logger format to use for outputting text to the console.
+	 * It should be an sprintf()able string accepting 5 string arguments:
+	 * - time
+	 * - color
+	 * - thread name
+	 * - prefix (debug, info etc)
+	 * - message
+	 *
+	 * @see http://php.net/manual/en/function.sprintf.php
+	 *
+	 * @param string $format
+	 */
+	public function setFormat(string $format) : void{
+		$this->format = $format;
 	}
 
 	public function emergency($message){
@@ -160,10 +235,16 @@ class MainLogger extends \AttachableThreadedLogger{
 		$errno = $errorConversion[$errno] ?? $errno;
 		$errstr = preg_replace('/\s+/', ' ', trim($errstr));
 		$errfile = Utils::cleanPath($errfile);
-		$this->log($type, get_class($e) . ": \"$errstr\" ($errno) in \"$errfile\" at line $errline");
-		foreach(Utils::getTrace(0, $trace) as $i => $line){
-			$this->debug($line, true);
-		}
+
+		$message = get_class($e) . ": \"$errstr\" ($errno) in \"$errfile\" at line $errline";
+		$stack = Utils::printableTrace($trace);
+
+		$this->synchronized(function() use ($type, $message, $stack) : void{
+			$this->log($type, $message);
+			foreach($stack as $line){
+				$this->debug($line, true);
+			}
+		});
 
 		$this->syncFlushBuffer();
 	}
@@ -203,7 +284,12 @@ class MainLogger extends \AttachableThreadedLogger{
 	}
 
 	protected function send($message, $level, $prefix, $color){
-		$now = time();
+		/** @var \DateTime|null $time */
+		static $time = null;
+		if($time === null){ //thread-local
+			$time = new \DateTime('now', new \DateTimeZone($this->timezone));
+		}
+		$time->setTimestamp(time());
 
 		$thread = \Thread::getCurrentThread();
 		if($thread === null){
@@ -214,20 +300,23 @@ class MainLogger extends \AttachableThreadedLogger{
 			$threadName = (new \ReflectionClass($thread))->getShortName() . " thread";
 		}
 
-		$message = Terminal::toANSI(TextFormat::AQUA . "[" . date("H:i:s", $now) . "] " . TextFormat::RESET . $color . "[" . $threadName . "/" . $prefix . "]:" . " " . $message . TextFormat::RESET);
-		$cleanMessage = TextFormat::clean($message);
+		$message = sprintf($this->format, $time->format("H:i:s"), $color, $threadName, $prefix, $message);
 
-		if(!Terminal::hasFormattingCodes()){
-			echo $cleanMessage . PHP_EOL;
-		}else{
-			echo $message . PHP_EOL;
-		}
+		$this->synchronized(function() use ($message, $level, $time) : void{
+			$cleanMessage = TextFormat::clean($message);
 
-		foreach($this->attachments as $attachment){
-			$attachment->call($level, $message);
-		}
+			if($this->mainThreadHasFormattingCodes and Terminal::hasFormattingCodes()){ //hasFormattingCodes() lazy-inits colour codes because we don't know if they've been registered on this thread
+				echo Terminal::toANSI($message) . PHP_EOL;
+			}else{
+				echo $cleanMessage . PHP_EOL;
+			}
 
-		$this->logStream[] = date("Y-m-d", $now) . " " . $cleanMessage . PHP_EOL;
+			foreach($this->attachments as $attachment){
+				$attachment->call($level, $message);
+			}
+
+			$this->logStream[] = $time->format("Y-m-d") . " " . $cleanMessage . PHP_EOL;
+		});
 	}
 
 	public function syncFlushBuffer(){

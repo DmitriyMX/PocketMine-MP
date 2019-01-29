@@ -25,6 +25,7 @@ namespace pocketmine\block;
 
 use pocketmine\item\Item;
 use pocketmine\item\ItemFactory;
+use function mt_rand;
 
 class Gravel extends Fallable{
 
@@ -55,5 +56,4 @@ class Gravel extends Fallable{
 
 		return parent::getDropsForCompatibleTool($item);
 	}
-
 }

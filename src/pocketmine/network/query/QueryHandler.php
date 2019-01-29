@@ -30,6 +30,14 @@ namespace pocketmine\network\query;
 use pocketmine\network\AdvancedSourceInterface;
 use pocketmine\Server;
 use pocketmine\utils\Binary;
+use function bin2hex;
+use function chr;
+use function hash;
+use function microtime;
+use function ord;
+use function random_bytes;
+use function strlen;
+use function substr;
 
 class QueryHandler{
 	private $server, $lastToken, $token, $longData, $shortData, $timeout;
@@ -40,7 +48,7 @@ class QueryHandler{
 	public function __construct(){
 		$this->server = Server::getInstance();
 		$this->server->getLogger()->info($this->server->getLanguage()->translateString("pocketmine.server.query.start"));
-		$addr = ($ip = $this->server->getIp()) != "" ? $ip : "0.0.0.0";
+		$addr = $this->server->getIp();
 		$port = $this->server->getPort();
 		$this->server->getLogger()->info($this->server->getLanguage()->translateString("pocketmine.server.query.info", [$port]));
 		/*
@@ -58,6 +66,11 @@ class QueryHandler{
 		$this->server->getLogger()->info($this->server->getLanguage()->translateString("pocketmine.server.query.running", [$addr, $port]));
 	}
 
+	private function debug(string $message) : void{
+		//TODO: replace this with a proper prefixed logger
+		$this->server->getLogger()->debug("[Query] $message");
+	}
+
 	public function regenerateInfo(){
 		$ev = $this->server->getQueryInformation();
 		$this->longData = $ev->getLongQuery();
@@ -70,7 +83,7 @@ class QueryHandler{
 		$this->token = random_bytes(16);
 	}
 
-	public static function getTokenString($token, $salt){
+	public static function getTokenString(string $token, string $salt) : int{
 		return Binary::readInt(substr(hash("sha512", $salt . ":" . $token, true), 7, 4));
 	}
 
@@ -91,7 +104,8 @@ class QueryHandler{
 				break;
 			case self::STATISTICS: //Stat
 				$token = Binary::readInt(substr($payload, 0, 4));
-				if($token !== self::getTokenString($this->token, $address) and $token !== self::getTokenString($this->lastToken, $address)){
+				if($token !== ($t1 = self::getTokenString($this->token, $address)) and $token !== ($t2 = self::getTokenString($this->lastToken, $address))){
+					$this->debug("Bad token $token from $address $port, expected $t1 or $t2");
 					break;
 				}
 				$reply = chr(self::STATISTICS);
@@ -108,7 +122,9 @@ class QueryHandler{
 				}
 				$interface->sendRawPacket($address, $port, $reply);
 				break;
+			default:
+				$this->debug("Unhandled packet from $address $port: 0x" . bin2hex($packet));
+				break;
 		}
 	}
-
 }

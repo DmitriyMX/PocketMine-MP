@@ -27,7 +27,7 @@ use pocketmine\event\block\BlockGrowEvent;
 use pocketmine\item\Item;
 use pocketmine\math\Vector3;
 use pocketmine\Player;
-use pocketmine\Server;
+use function mt_rand;
 
 abstract class Crops extends Flowable{
 
@@ -43,15 +43,15 @@ abstract class Crops extends Flowable{
 
 
 	public function onActivate(Item $item, Player $player = null) : bool{
-		if($item->getId() === Item::DYE and $item->getDamage() === 0x0F){ //Bonemeal
+		if($this->meta < 7 and $item->getId() === Item::DYE and $item->getDamage() === 0x0F){ //Bonemeal
 			$block = clone $this;
 			$block->meta += mt_rand(2, 5);
 			if($block->meta > 7){
 				$block->meta = 7;
 			}
 
-			Server::getInstance()->getPluginManager()->callEvent($ev = new BlockGrowEvent($this, $block));
-
+			$ev = new BlockGrowEvent($this, $block);
+			$ev->call();
 			if(!$ev->isCancelled()){
 				$this->getLevel()->setBlock($this, $ev->getNewState(), true, true);
 			}
@@ -79,8 +79,8 @@ abstract class Crops extends Flowable{
 			if($this->meta < 0x07){
 				$block = clone $this;
 				++$block->meta;
-				Server::getInstance()->getPluginManager()->callEvent($ev = new BlockGrowEvent($this, $block));
-
+				$ev = new BlockGrowEvent($this, $block);
+				$ev->call();
 				if(!$ev->isCancelled()){
 					$this->getLevel()->setBlock($this, $ev->getNewState(), true, true);
 				}

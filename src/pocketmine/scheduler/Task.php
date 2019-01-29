@@ -23,9 +23,8 @@ declare(strict_types=1);
 
 namespace pocketmine\scheduler;
 
-/**
- * WARNING! Tasks created by plugins MUST extend PluginTask
- */
+use pocketmine\utils\Utils;
+
 abstract class Task{
 
 	/** @var TaskHandler */
@@ -47,6 +46,10 @@ abstract class Task{
 		}
 
 		return -1;
+	}
+
+	public function getName() : string{
+		return Utils::getNiceClassName($this);
 	}
 
 	/**
@@ -73,5 +76,4 @@ abstract class Task{
 	public function onCancel(){
 
 	}
-
 }

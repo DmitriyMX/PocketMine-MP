@@ -28,6 +28,9 @@ use pocketmine\inventory\CraftingRecipe;
 use pocketmine\item\Item;
 use pocketmine\network\mcpe\protocol\ContainerClosePacket;
 use pocketmine\network\mcpe\protocol\types\ContainerIds;
+use function array_pop;
+use function count;
+use function intdiv;
 
 class CraftingTransaction extends InventoryTransaction{
 	/** @var CraftingRecipe|null */
@@ -134,7 +137,8 @@ class CraftingTransaction extends InventoryTransaction{
 	}
 
 	protected function callExecuteEvent() : bool{
-		$this->source->getServer()->getPluginManager()->callEvent($ev = new CraftItemEvent($this, $this->recipe, $this->repetitions, $this->inputs, $this->outputs));
+		$ev = new CraftItemEvent($this, $this->recipe, $this->repetitions, $this->inputs, $this->outputs);
+		$ev->call();
 		return !$ev->isCancelled();
 	}
 

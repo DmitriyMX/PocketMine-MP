@@ -46,7 +46,7 @@ interface EntityIds{
 	public const POLAR_BEAR = 28;
 	public const LLAMA = 29;
 	public const PARROT = 30;
-
+	public const DOLPHIN = 31;
 	public const ZOMBIE = 32;
 	public const CREEPER = 33;
 	public const SKELETON = 34;
@@ -71,8 +71,9 @@ interface EntityIds{
 	public const ENDER_DRAGON = 53;
 	public const SHULKER = 54;
 	public const ENDERMITE = 55;
-	public const LEARN_TO_CODE_MASCOT = 56;
+	public const AGENT = 56, LEARN_TO_CODE_MASCOT = 56;
 	public const VINDICATOR = 57;
+	public const PHANTOM = 58;
 
 	public const ARMOR_STAND = 61;
 	public const TRIPOD_CAMERA = 62;
@@ -86,7 +87,9 @@ interface EntityIds{
 	public const EYE_OF_ENDER_SIGNAL = 70;
 	public const ENDER_CRYSTAL = 71;
 	public const FIREWORKS_ROCKET = 72;
-
+	public const THROWN_TRIDENT = 73, TRIDENT = 73;
+	public const TURTLE = 74;
+	public const CAT = 75;
 	public const SHULKER_BULLET = 76;
 	public const FISHING_HOOK = 77;
 	public const CHALKBOARD = 78;
@@ -96,7 +99,7 @@ interface EntityIds{
 	public const EGG = 82;
 	public const PAINTING = 83;
 	public const MINECART = 84;
-	public const LARGE_FIREBALL = 85;
+	public const FIREBALL = 85, LARGE_FIREBALL = 85;
 	public const SPLASH_POTION = 86;
 	public const ENDER_PEARL = 87;
 	public const LEASH_KNOT = 88;
@@ -116,4 +119,12 @@ interface EntityIds{
 	public const EVOCATION_FANG = 103;
 	public const EVOCATION_ILLAGER = 104;
 	public const VEX = 105;
+	public const ICE_BOMB = 106;
+	public const BALLOON = 107;
+	public const PUFFERFISH = 108;
+	public const SALMON = 109;
+	public const DROWNED = 110;
+	public const TROPICALFISH = 111, TROPICAL_FISH = 111;
+	public const COD = 112, FISH = 112;
+	public const PANDA = 113;
 }

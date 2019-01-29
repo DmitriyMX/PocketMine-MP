@@ -24,13 +24,12 @@ declare(strict_types=1);
 namespace pocketmine\inventory;
 
 use pocketmine\entity\Living;
-use pocketmine\event\entity\EntityArmorChangeEvent;
 use pocketmine\item\Item;
 use pocketmine\network\mcpe\protocol\InventoryContentPacket;
 use pocketmine\network\mcpe\protocol\InventorySlotPacket;
 use pocketmine\network\mcpe\protocol\MobArmorEquipmentPacket;
 use pocketmine\Player;
-use pocketmine\Server;
+use function array_merge;
 
 class ArmorInventory extends BaseInventory{
 	public const SLOT_HEAD = 0;
@@ -88,15 +87,6 @@ class ArmorInventory extends BaseInventory{
 
 	public function setBoots(Item $boots) : bool{
 		return $this->setItem(self::SLOT_FEET, $boots);
-	}
-
-	protected function doSetItemEvents(int $index, Item $newItem) : ?Item{
-		Server::getInstance()->getPluginManager()->callEvent($ev = new EntityArmorChangeEvent($this->getHolder(), $this->getItem($index), $newItem, $index));
-		if($ev->isCancelled()){
-			return null;
-		}
-
-		return $ev->getNewItem();
 	}
 
 	public function sendSlot(int $index, $target) : void{

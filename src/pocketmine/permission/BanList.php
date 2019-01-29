@@ -25,6 +25,14 @@ namespace pocketmine\permission;
 
 use pocketmine\Server;
 use pocketmine\utils\MainLogger;
+use function fclose;
+use function fgets;
+use function fopen;
+use function fwrite;
+use function is_resource;
+use function strftime;
+use function strtolower;
+use function time;
 
 class BanList{
 
@@ -166,13 +174,13 @@ class BanList{
 	}
 
 	/**
-	 * @param bool $flag
+	 * @param bool $writeHeader
 	 */
-	public function save(bool $flag = true){
+	public function save(bool $writeHeader = true){
 		$this->removeExpired();
 		$fp = @fopen($this->file, "w");
 		if(is_resource($fp)){
-			if($flag){
+			if($writeHeader){
 				fwrite($fp, "# Updated " . strftime("%x %H:%M", time()) . " by " . Server::getInstance()->getName() . " " . Server::getInstance()->getPocketMineVersion() . "\n");
 				fwrite($fp, "# victim name | ban date | banned by | banned until | reason\n\n");
 			}
@@ -185,5 +193,4 @@ class BanList{
 			MainLogger::getLogger()->error("Could not save ban list");
 		}
 	}
-
 }

@@ -28,6 +28,7 @@ use pocketmine\item\Item;
 use pocketmine\item\ItemFactory;
 use pocketmine\math\Vector3;
 use pocketmine\Player;
+use function mt_rand;
 
 class Leaves extends Transparent{
 	public const OAK = 0;
@@ -67,8 +68,7 @@ class Leaves extends Transparent{
 	}
 
 
-	protected function findLog(Block $pos, array $visited, $distance, &$check, $fromSide = null) : bool{
-		++$check;
+	protected function findLog(Block $pos, array $visited, int $distance, ?int $fromSide = null) : bool{
 		$index = $pos->x . "." . $pos->y . "." . $pos->z;
 		if(isset($visited[$index])){
 			return false;
@@ -83,45 +83,45 @@ class Leaves extends Transparent{
 			}
 			if($fromSide === null){
 				for($side = 2; $side <= 5; ++$side){
-					if($this->findLog($pos->getSide($side), $visited, $distance + 1, $check, $side)){
+					if($this->findLog($pos->getSide($side), $visited, $distance + 1, $side)){
 						return true;
 					}
 				}
 			}else{ //No more loops
 				switch($fromSide){
 					case 2:
-						if($this->findLog($pos->getSide(Vector3::SIDE_NORTH), $visited, $distance + 1, $check, $fromSide)){
+						if($this->findLog($pos->getSide(Vector3::SIDE_NORTH), $visited, $distance + 1, $fromSide)){
 							return true;
-						}elseif($this->findLog($pos->getSide(Vector3::SIDE_WEST), $visited, $distance + 1, $check, $fromSide)){
+						}elseif($this->findLog($pos->getSide(Vector3::SIDE_WEST), $visited, $distance + 1, $fromSide)){
 							return true;
-						}elseif($this->findLog($pos->getSide(Vector3::SIDE_EAST), $visited, $distance + 1, $check, $fromSide)){
+						}elseif($this->findLog($pos->getSide(Vector3::SIDE_EAST), $visited, $distance + 1, $fromSide)){
 							return true;
 						}
 						break;
 					case 3:
-						if($this->findLog($pos->getSide(Vector3::SIDE_SOUTH), $visited, $distance + 1, $check, $fromSide)){
+						if($this->findLog($pos->getSide(Vector3::SIDE_SOUTH), $visited, $distance + 1, $fromSide)){
 							return true;
-						}elseif($this->findLog($pos->getSide(Vector3::SIDE_WEST), $visited, $distance + 1, $check, $fromSide)){
+						}elseif($this->findLog($pos->getSide(Vector3::SIDE_WEST), $visited, $distance + 1, $fromSide)){
 							return true;
-						}elseif($this->findLog($pos->getSide(Vector3::SIDE_EAST), $visited, $distance + 1, $check, $fromSide)){
+						}elseif($this->findLog($pos->getSide(Vector3::SIDE_EAST), $visited, $distance + 1, $fromSide)){
 							return true;
 						}
 						break;
 					case 4:
-						if($this->findLog($pos->getSide(Vector3::SIDE_NORTH), $visited, $distance + 1, $check, $fromSide)){
+						if($this->findLog($pos->getSide(Vector3::SIDE_NORTH), $visited, $distance + 1, $fromSide)){
 							return true;
-						}elseif($this->findLog($pos->getSide(Vector3::SIDE_SOUTH), $visited, $distance + 1, $check, $fromSide)){
+						}elseif($this->findLog($pos->getSide(Vector3::SIDE_SOUTH), $visited, $distance + 1, $fromSide)){
 							return true;
-						}elseif($this->findLog($pos->getSide(Vector3::SIDE_WEST), $visited, $distance + 1, $check, $fromSide)){
+						}elseif($this->findLog($pos->getSide(Vector3::SIDE_WEST), $visited, $distance + 1, $fromSide)){
 							return true;
 						}
 						break;
 					case 5:
-						if($this->findLog($pos->getSide(Vector3::SIDE_NORTH), $visited, $distance + 1, $check, $fromSide)){
+						if($this->findLog($pos->getSide(Vector3::SIDE_NORTH), $visited, $distance + 1, $fromSide)){
 							return true;
-						}elseif($this->findLog($pos->getSide(Vector3::SIDE_SOUTH), $visited, $distance + 1, $check, $fromSide)){
+						}elseif($this->findLog($pos->getSide(Vector3::SIDE_SOUTH), $visited, $distance + 1, $fromSide)){
 							return true;
-						}elseif($this->findLog($pos->getSide(Vector3::SIDE_EAST), $visited, $distance + 1, $check, $fromSide)){
+						}elseif($this->findLog($pos->getSide(Vector3::SIDE_EAST), $visited, $distance + 1, $fromSide)){
 							return true;
 						}
 						break;
@@ -147,11 +147,10 @@ class Leaves extends Transparent{
 		if(($this->meta & 0b00001100) === 0x08){
 			$this->meta &= 0x03;
 			$visited = [];
-			$check = 0;
 
-			$this->getLevel()->getServer()->getPluginManager()->callEvent($ev = new LeavesDecayEvent($this));
-
-			if($ev->isCancelled() or $this->findLog($this, $visited, 0, $check)){
+			$ev = new LeavesDecayEvent($this);
+			$ev->call();
+			if($ev->isCancelled() or $this->findLog($this, $visited, 0)){
 				$this->getLevel()->setBlock($this, $this, false, false);
 			}else{
 				$this->getLevel()->useBreakOn($this);

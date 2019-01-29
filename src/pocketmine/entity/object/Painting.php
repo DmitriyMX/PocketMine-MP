@@ -37,6 +37,7 @@ use pocketmine\nbt\tag\ByteTag;
 use pocketmine\nbt\tag\CompoundTag;
 use pocketmine\network\mcpe\protocol\AddPaintingPacket;
 use pocketmine\Player;
+use function ceil;
 
 class Painting extends Entity{
 	public const NETWORK_ID = self::PAINTING;
@@ -70,13 +71,13 @@ class Painting extends Entity{
 		parent::__construct($level, $nbt);
 	}
 
-	protected function initEntity(){
+	protected function initEntity() : void{
 		$this->setMaxHealth(1);
 		$this->setHealth(1);
 		parent::initEntity();
 	}
 
-	public function saveNBT(){
+	public function saveNBT() : void{
 		parent::saveNBT();
 		$this->namedtag->setInt("TileX", (int) $this->blockIn->x);
 		$this->namedtag->setInt("TileY", (int) $this->blockIn->y);
@@ -84,9 +85,11 @@ class Painting extends Entity{
 
 		$this->namedtag->setByte("Facing", (int) $this->direction);
 		$this->namedtag->setByte("Direction", (int) $this->direction); //Save both for full compatibility
+
+		$this->namedtag->setString("Motive", $this->motive);
 	}
 
-	public function kill(){
+	public function kill() : void{
 		parent::kill();
 
 		$drops = true;
@@ -138,7 +141,7 @@ class Painting extends Entity{
 		return false;
 	}
 
-	protected function updateMovement(bool $teleport = false){
+	protected function updateMovement(bool $teleport = false) : void{
 
 	}
 
@@ -166,7 +169,7 @@ class Painting extends Entity{
 		return PaintingMotive::getMotiveByName($this->motive);
 	}
 
-	public function getDirection() : int{
+	public function getDirection() : ?int{
 		return $this->direction;
 	}
 

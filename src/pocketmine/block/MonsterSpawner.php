@@ -25,6 +25,7 @@ namespace pocketmine\block;
 
 use pocketmine\item\Item;
 use pocketmine\item\TieredTool;
+use function mt_rand;
 
 class MonsterSpawner extends Transparent{
 
@@ -56,5 +57,9 @@ class MonsterSpawner extends Transparent{
 
 	public function isAffectedBySilkTouch() : bool{
 		return false;
+	}
+
+	protected function getXpDropAmount() : int{
+		return mt_rand(15, 43);
 	}
 }

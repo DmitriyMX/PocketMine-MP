@@ -25,6 +25,18 @@ declare(strict_types=1);
 namespace pocketmine\resourcepacks;
 
 
+use Ahc\Json\Comment as CommentedJsonDecoder;
+use function count;
+use function fclose;
+use function feof;
+use function file_exists;
+use function filesize;
+use function fopen;
+use function fread;
+use function fseek;
+use function hash_file;
+use function implode;
+
 class ZippedResourcePack implements ResourcePack{
 
 	/**
@@ -32,6 +44,7 @@ class ZippedResourcePack implements ResourcePack{
 	 * TODO: add more manifest validation
 	 *
 	 * @param \stdClass $manifest
+	 *
 	 * @return bool
 	 */
 	public static function verifyManifest(\stdClass $manifest) : bool{
@@ -67,27 +80,33 @@ class ZippedResourcePack implements ResourcePack{
 		$this->path = $zipPath;
 
 		if(!file_exists($zipPath)){
-			throw new \InvalidArgumentException("Could not open resource pack $zipPath: file not found");
+			throw new ResourcePackException("File not found");
 		}
 
 		$archive = new \ZipArchive();
 		if(($openResult = $archive->open($zipPath)) !== true){
-			throw new \InvalidStateException("Encountered ZipArchive error code $openResult while trying to open $zipPath");
+			throw new ResourcePackException("Encountered ZipArchive error code $openResult while trying to open $zipPath");
 		}
 
 		if(($manifestData = $archive->getFromName("manifest.json")) === false){
 			if($archive->locateName("pack_manifest.json") !== false){
-				throw new \InvalidStateException("Could not load resource pack from $zipPath: unsupported old pack format");
+				throw new ResourcePackException("Unsupported old pack format");
 			}else{
-				throw new \InvalidStateException("Could not load resource pack from $zipPath: manifest.json not found in the archive root");
+				throw new ResourcePackException("manifest.json not found in the archive root");
 			}
 		}
 
 		$archive->close();
 
-		$manifest = json_decode($manifestData);
-		if($manifest === null or !self::verifyManifest($manifest)){
-			throw new \InvalidStateException("Could not load resource pack from $zipPath: manifest.json is invalid or incomplete");
+		//maybe comments in the json, use stripped decoder (thanks mojang)
+		try{
+			$manifest = (new CommentedJsonDecoder())->decode($manifestData);
+		}catch(\RuntimeException $e){
+			throw new ResourcePackException("Failed to parse manifest.json: " . $e->getMessage(), $e->getCode(), $e);
+		}
+
+		if(!self::verifyManifest($manifest)){
+			throw new ResourcePackException("manifest.json is missing required fields");
 		}
 
 		$this->manifest = $manifest;

@@ -38,6 +38,8 @@ use pocketmine\metadata\Metadatable;
 use pocketmine\metadata\MetadataValue;
 use pocketmine\Player;
 use pocketmine\plugin\Plugin;
+use function array_merge;
+use const PHP_INT_MAX;
 
 class Block extends Position implements BlockIds, Metadatable{
 
@@ -107,6 +109,14 @@ class Block extends Position implements BlockIds, Metadatable{
 	 */
 	public function getItemId() : int{
 		return $this->itemId ?? $this->getId();
+	}
+
+	/**
+	 * @internal
+	 * @return int
+	 */
+	public function getRuntimeId() : int{
+		return BlockFactory::toStaticRuntimeId($this->getId(), $this->getDamage());
 	}
 
 	/**
@@ -469,6 +479,30 @@ class Block extends Position implements BlockIds, Metadatable{
 		return [
 			ItemFactory::get($this->getItemId(), $this->getVariant())
 		];
+	}
+
+	/**
+	 * Returns how much XP will be dropped by breaking this block with the given item.
+	 *
+	 * @param Item $item
+	 *
+	 * @return int
+	 */
+	public function getXpDropForTool(Item $item) : int{
+		if($item->hasEnchantment(Enchantment::SILK_TOUCH) or !$this->isCompatibleWithTool($item)){
+			return 0;
+		}
+
+		return $this->getXpDropAmount();
+	}
+
+	/**
+	 * Returns how much XP this block will drop when broken with an appropriate tool.
+	 *
+	 * @return int
+	 */
+	protected function getXpDropAmount() : int{
+		return 0;
 	}
 
 	/**

@@ -30,6 +30,7 @@ use pocketmine\math\Vector3;
 use pocketmine\Player;
 use pocketmine\tile\Banner as TileBanner;
 use pocketmine\tile\Tile;
+use function floor;
 
 class StandingBanner extends Transparent{
 
@@ -92,8 +93,8 @@ class StandingBanner extends Transparent{
 		$tile = $this->level->getTile($this);
 
 		$drop = ItemFactory::get(Item::BANNER, ($tile instanceof TileBanner ? $tile->getBaseColor() : 0));
-		if($tile instanceof TileBanner and ($patterns = $tile->namedtag->getListTag(TileBanner::TAG_PATTERNS)) !== null and !$patterns->empty()){
-			$drop->setNamedTagEntry($patterns);
+		if($tile instanceof TileBanner and !($patterns = $tile->getPatterns())->empty()){
+			$drop->setNamedTagEntry(clone $patterns);
 		}
 
 		return [$drop];

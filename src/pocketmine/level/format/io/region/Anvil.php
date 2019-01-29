@@ -24,8 +24,8 @@ declare(strict_types=1);
 namespace pocketmine\level\format\io\region;
 
 use pocketmine\level\format\Chunk;
-use pocketmine\level\format\ChunkException;
 use pocketmine\level\format\io\ChunkUtils;
+use pocketmine\level\format\io\exception\CorruptedChunkException;
 use pocketmine\level\format\SubChunk;
 use pocketmine\nbt\BigEndianNBTStream;
 use pocketmine\nbt\NBT;
@@ -75,8 +75,7 @@ class Anvil extends McRegion{
 
 		$tiles = [];
 		foreach($chunk->getTiles() as $tile){
-			$tile->saveNBT();
-			$tiles[] = $tile->namedtag;
+			$tiles[] = $tile->saveNBT();
 		}
 
 		$nbt->setTag(new ListTag("TileEntities", $tiles, NBT::TAG_Compound));
@@ -96,11 +95,11 @@ class Anvil extends McRegion{
 		]);
 	}
 
-	protected function nbtDeserialize(string $data){
+	protected function nbtDeserialize(string $data) : Chunk{
 		$nbt = new BigEndianNBTStream();
 		$chunk = $nbt->readCompressed($data);
 		if(!($chunk instanceof CompoundTag) or !$chunk->hasTag("Level")){
-			throw new ChunkException("Invalid NBT format");
+			throw new CorruptedChunkException("'Level' key is missing from chunk NBT");
 		}
 
 		$chunk = $chunk->getCompoundTag("Level");
@@ -155,5 +154,4 @@ class Anvil extends McRegion{
 		//TODO: add world height options
 		return 256;
 	}
-
 }

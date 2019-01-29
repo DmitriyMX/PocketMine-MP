@@ -144,7 +144,8 @@ class LevelSoundEventPacket extends DataPacket{
 	public const SOUND_RECORD_WARD = 110;
 	public const SOUND_RECORD_11 = 111;
 	public const SOUND_RECORD_WAIT = 112;
-	public const SOUND_GUARDIAN_FLOP = 114;
+	public const SOUND_STOP_RECORD = 113; //Not really a sound
+	public const SOUND_FLOP = 114;
 	public const SOUND_ELDERGUARDIAN_CURSE = 115;
 	public const SOUND_MOB_WARNING = 116;
 	public const SOUND_MOB_WARNING_BABY = 117;
@@ -181,6 +182,7 @@ class LevelSoundEventPacket extends DataPacket{
 	public const SOUND_IMITATE_ELDER_GUARDIAN = 148;
 	public const SOUND_IMITATE_ENDER_DRAGON = 149;
 	public const SOUND_IMITATE_ENDERMAN = 150;
+
 	public const SOUND_IMITATE_EVOCATION_ILLAGER = 152;
 	public const SOUND_IMITATE_GHAST = 153;
 	public const SOUND_IMITATE_HUSK = 154;
@@ -207,8 +209,81 @@ class LevelSoundEventPacket extends DataPacket{
 	public const SOUND_RANDOM_ANVIL_USE = 175;
 	public const SOUND_BOTTLE_DRAGONBREATH = 176;
 	public const SOUND_PORTAL_TRAVEL = 177;
-	public const SOUND_DEFAULT = 178;
-	public const SOUND_UNDEFINED = 179;
+	public const SOUND_ITEM_TRIDENT_HIT = 178;
+	public const SOUND_ITEM_TRIDENT_RETURN = 179;
+	public const SOUND_ITEM_TRIDENT_RIPTIDE_1 = 180;
+	public const SOUND_ITEM_TRIDENT_RIPTIDE_2 = 181;
+	public const SOUND_ITEM_TRIDENT_RIPTIDE_3 = 182;
+	public const SOUND_ITEM_TRIDENT_THROW = 183;
+	public const SOUND_ITEM_TRIDENT_THUNDER = 184;
+	public const SOUND_ITEM_TRIDENT_HIT_GROUND = 185;
+	public const SOUND_DEFAULT = 186;
+
+	public const SOUND_ELEMCONSTRUCT_OPEN = 188;
+	public const SOUND_ICEBOMB_HIT = 189;
+	public const SOUND_BALLOONPOP = 190;
+	public const SOUND_LT_REACTION_ICEBOMB = 191;
+	public const SOUND_LT_REACTION_BLEACH = 192;
+	public const SOUND_LT_REACTION_EPASTE = 193;
+	public const SOUND_LT_REACTION_EPASTE2 = 194;
+
+	public const SOUND_LT_REACTION_FERTILIZER = 199;
+	public const SOUND_LT_REACTION_FIREBALL = 200;
+	public const SOUND_LT_REACTION_MGSALT = 201;
+	public const SOUND_LT_REACTION_MISCFIRE = 202;
+	public const SOUND_LT_REACTION_FIRE = 203;
+	public const SOUND_LT_REACTION_MISCEXPLOSION = 204;
+	public const SOUND_LT_REACTION_MISCMYSTICAL = 205;
+	public const SOUND_LT_REACTION_MISCMYSTICAL2 = 206;
+	public const SOUND_LT_REACTION_PRODUCT = 207;
+	public const SOUND_SPARKLER_USE = 208;
+	public const SOUND_GLOWSTICK_USE = 209;
+	public const SOUND_SPARKLER_ACTIVE = 210;
+	public const SOUND_CONVERT_TO_DROWNED = 211;
+	public const SOUND_BUCKET_FILL_FISH = 212;
+	public const SOUND_BUCKET_EMPTY_FISH = 213;
+	public const SOUND_BUBBLE_UP = 214;
+	public const SOUND_BUBBLE_DOWN = 215;
+	public const SOUND_BUBBLE_POP = 216;
+	public const SOUND_BUBBLE_UPINSIDE = 217;
+	public const SOUND_BUBBLE_DOWNINSIDE = 218;
+	public const SOUND_HURT_BABY = 219;
+	public const SOUND_DEATH_BABY = 220;
+	public const SOUND_STEP_BABY = 221;
+
+	public const SOUND_BORN = 223;
+	public const SOUND_BLOCK_TURTLE_EGG_BREAK = 224;
+	public const SOUND_BLOCK_TURTLE_EGG_CRACK = 225;
+	public const SOUND_BLOCK_TURTLE_EGG_HATCH = 226;
+
+	public const SOUND_BLOCK_TURTLE_EGG_ATTACK = 228;
+	public const SOUND_BEACON_ACTIVATE = 229;
+	public const SOUND_BEACON_AMBIENT = 230;
+	public const SOUND_BEACON_DEACTIVATE = 231;
+	public const SOUND_BEACON_POWER = 232;
+	public const SOUND_CONDUIT_ACTIVATE = 233;
+	public const SOUND_CONDUIT_AMBIENT = 234;
+	public const SOUND_CONDUIT_ATTACK = 235;
+	public const SOUND_CONDUIT_DEACTIVATE = 236;
+	public const SOUND_CONDUIT_SHORT = 237;
+	public const SOUND_SWOOP = 238;
+	public const SOUND_BLOCK_BAMBOO_SAPLING_PLACE = 239;
+	public const SOUND_PRESNEEZE = 240;
+	public const SOUND_SNEEZE = 241;
+	public const SOUND_AMBIENT_TAME = 242;
+	public const SOUND_SCARED = 243;
+	public const SOUND_BLOCK_SCAFFOLDING_CLIMB = 244;
+	public const SOUND_CROSSBOW_LOADING_START = 245;
+	public const SOUND_CROSSBOW_LOADING_MIDDLE = 246;
+	public const SOUND_CROSSBOW_LOADING_END = 247;
+	public const SOUND_CROSSBOW_SHOOT = 248;
+	public const SOUND_CROSSBOW_QUICK_CHARGE_START = 249;
+	public const SOUND_CROSSBOW_QUICK_CHARGE_MIDDLE = 250;
+	public const SOUND_CROSSBOW_QUICK_CHARGE_END = 251;
+	public const SOUND_AMBIENT_AGGRESSIVE = 252;
+	public const SOUND_AMBIENT_WORRIED = 253;
+	public const SOUND_CANT_BREED = 254;
+	public const SOUND_UNDEFINED = 255;
 
 	/** @var int */
 	public $sound;
@@ -216,8 +291,8 @@ class LevelSoundEventPacket extends DataPacket{
 	public $position;
 	/** @var int */
 	public $extraData = -1;
-	/** @var int */
-	public $pitch = 1;
+	/** @var string */
+	public $entityType = ":"; //???
 	/** @var bool */
 	public $isBabyMob = false; //...
 	/** @var bool */
@@ -227,7 +302,7 @@ class LevelSoundEventPacket extends DataPacket{
 		$this->sound = $this->getByte();
 		$this->position = $this->getVector3();
 		$this->extraData = $this->getVarInt();
-		$this->pitch = $this->getVarInt();
+		$this->entityType = $this->getString();
 		$this->isBabyMob = $this->getBool();
 		$this->disableRelativeVolume = $this->getBool();
 	}
@@ -236,7 +311,7 @@ class LevelSoundEventPacket extends DataPacket{
 		$this->putByte($this->sound);
 		$this->putVector3($this->position);
 		$this->putVarInt($this->extraData);
-		$this->putVarInt($this->pitch);
+		$this->putString($this->entityType);
 		$this->putBool($this->isBabyMob);
 		$this->putBool($this->disableRelativeVolume);
 	}

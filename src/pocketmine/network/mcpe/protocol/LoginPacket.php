@@ -30,6 +30,8 @@ use pocketmine\network\mcpe\NetworkSession;
 use pocketmine\utils\BinaryStream;
 use pocketmine\utils\MainLogger;
 use pocketmine\utils\Utils;
+use function get_class;
+use function json_decode;
 
 class LoginPacket extends DataPacket{
 	public const NETWORK_ID = ProtocolInfo::LOGIN_PACKET;
@@ -79,13 +81,6 @@ class LoginPacket extends DataPacket{
 	protected function decodePayload(){
 		$this->protocol = $this->getInt();
 
-		if($this->protocol !== ProtocolInfo::CURRENT_PROTOCOL){
-			if($this->protocol > 0xffff){ //guess MCPE <= 1.1
-				$this->offset -= 6;
-				$this->protocol = $this->getInt();
-			}
-		}
-
 		try{
 			$this->decodeConnectionRequest();
 		}catch(\Throwable $e){
@@ -94,8 +89,8 @@ class LoginPacket extends DataPacket{
 			}
 
 			$logger = MainLogger::getLogger();
-			$logger->debug(get_class($e)  . " was thrown while decoding connection request in login (protocol version " . ($this->protocol ?? "unknown") . "): " . $e->getMessage());
-			foreach(Utils::getTrace(0, $e->getTrace()) as $line){
+			$logger->debug(get_class($e) . " was thrown while decoding connection request in login (protocol version " . ($this->protocol ?? "unknown") . "): " . $e->getMessage());
+			foreach(Utils::printableTrace($e->getTrace()) as $line){
 				$logger->debug($line);
 			}
 		}
@@ -105,9 +100,15 @@ class LoginPacket extends DataPacket{
 		$buffer = new BinaryStream($this->getString());
 
 		$this->chainData = json_decode($buffer->get($buffer->getLInt()), true);
+
+		$hasExtraData = false;
 		foreach($this->chainData["chain"] as $chain){
 			$webtoken = Utils::decodeJWT($chain);
 			if(isset($webtoken["extraData"])){
+				if($hasExtraData){
+					throw new \RuntimeException("Found 'extraData' multiple times in key chain");
+				}
+				$hasExtraData = true;
 				if(isset($webtoken["extraData"]["displayName"])){
 					$this->username = $webtoken["extraData"]["displayName"];
 				}

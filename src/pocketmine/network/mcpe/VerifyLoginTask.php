@@ -27,10 +27,25 @@ use pocketmine\network\mcpe\protocol\LoginPacket;
 use pocketmine\Player;
 use pocketmine\scheduler\AsyncTask;
 use pocketmine\Server;
+use function assert;
+use function base64_decode;
+use function chr;
+use function explode;
+use function json_decode;
+use function ltrim;
+use function openssl_verify;
+use function ord;
+use function str_split;
+use function strlen;
+use function time;
+use function wordwrap;
+use const OPENSSL_ALGO_SHA384;
 
 class VerifyLoginTask extends AsyncTask{
 
 	public const MOJANG_ROOT_PUBLIC_KEY = "MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE8ELkixyLcwlZryUQcu1TvPOmI2B7vX83ndnWRUaXm74wFfa5f/lwQNTfrLVHa2PmenpGI6JhIMUJaWZrjmMj90NoKNFSNBuKdm8rYiXsfaz3K36x/1U26HpG0ZxK/V1V";
+
+	private const CLOCK_DRIFT_MAX = 60;
 
 	/** @var LoginPacket */
 	private $packet;
@@ -131,11 +146,11 @@ class VerifyLoginTask extends AsyncTask{
 		$claims = json_decode(base64_decode(strtr($payloadB64, '-_', '+/'), true), true);
 
 		$time = time();
-		if(isset($claims["nbf"]) and $claims["nbf"] > $time){
+		if(isset($claims["nbf"]) and $claims["nbf"] > $time + self::CLOCK_DRIFT_MAX){
 			throw new VerifyLoginException("%pocketmine.disconnect.invalidSession.tooEarly");
 		}
 
-		if(isset($claims["exp"]) and $claims["exp"] < $time){
+		if(isset($claims["exp"]) and $claims["exp"] < $time - self::CLOCK_DRIFT_MAX){
 			throw new VerifyLoginException("%pocketmine.disconnect.invalidSession.tooLate");
 		}
 
@@ -144,12 +159,11 @@ class VerifyLoginTask extends AsyncTask{
 
 	public function onCompletion(Server $server){
 		/** @var Player $player */
-		$player = $this->fetchLocal($server);
-		if($player->isClosed()){
+		$player = $this->fetchLocal();
+		if(!$player->isConnected()){
 			$server->getLogger()->error("Player " . $player->getName() . " was disconnected before their login could be verified");
 		}else{
 			$player->onVerifyCompleted($this->packet, $this->error, $this->authenticated);
 		}
 	}
-
 }

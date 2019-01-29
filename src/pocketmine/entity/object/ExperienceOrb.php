@@ -28,6 +28,7 @@ use pocketmine\entity\Human;
 use pocketmine\nbt\tag\IntTag;
 use pocketmine\nbt\tag\ShortTag;
 use pocketmine\Player;
+use function sqrt;
 
 class ExperienceOrb extends Entity{
 	public const NETWORK_ID = self::XP_ORB;
@@ -88,6 +89,9 @@ class ExperienceOrb extends Entity{
 	public $gravity = 0.04;
 	public $drag = 0.02;
 
+	/** @var int */
+	protected $age = 0;
+
 	/**
 	 * @var int
 	 * Ticker used for determining interval in which to look for new target players.
@@ -100,7 +104,7 @@ class ExperienceOrb extends Entity{
 	 */
 	protected $targetPlayerRuntimeId = null;
 
-	protected function initEntity(){
+	protected function initEntity() : void{
 		parent::initEntity();
 
 		$this->age = $this->namedtag->getShort("Age", 0);
@@ -115,7 +119,7 @@ class ExperienceOrb extends Entity{
 		$this->setXpValue($value);
 	}
 
-	public function saveNBT(){
+	public function saveNBT() : void{
 		parent::saveNBT();
 
 		$this->namedtag->setShort("Age", $this->age);
@@ -144,7 +148,7 @@ class ExperienceOrb extends Entity{
 			return null;
 		}
 
-		$entity = $this->server->findEntity($this->targetPlayerRuntimeId, $this->level);
+		$entity = $this->level->getEntity($this->targetPlayerRuntimeId);
 		if($entity instanceof Human){
 			return $entity;
 		}
@@ -153,19 +157,20 @@ class ExperienceOrb extends Entity{
 	}
 
 	public function setTargetPlayer(?Human $player) : void{
-		$this->targetPlayerRuntimeId = $player ? $player->getId() : null;
+		$this->targetPlayerRuntimeId = $player !== null ? $player->getId() : null;
 	}
 
 	public function entityBaseTick(int $tickDiff = 1) : bool{
 		$hasUpdate = parent::entityBaseTick($tickDiff);
 
+		$this->age += $tickDiff;
 		if($this->age > 6000){
 			$this->flagForDespawn();
 			return true;
 		}
 
 		$currentTarget = $this->getTargetPlayer();
-		if($currentTarget !== null and $currentTarget->distanceSquared($this) > self::MAX_TARGET_DISTANCE ** 2){
+		if($currentTarget !== null and (!$currentTarget->isAlive() or $currentTarget->distanceSquared($this) > self::MAX_TARGET_DISTANCE ** 2)){
 			$currentTarget = null;
 		}
 
@@ -186,31 +191,28 @@ class ExperienceOrb extends Entity{
 		$this->setTargetPlayer($currentTarget);
 
 		if($currentTarget !== null){
-			$vector = $currentTarget->subtract($this)->add(0, $currentTarget->getEyeHeight() / 2, 0)->divide(self::MAX_TARGET_DISTANCE);
+			$vector = $currentTarget->add(0, $currentTarget->getEyeHeight() / 2, 0)->subtract($this)->divide(self::MAX_TARGET_DISTANCE);
 
-			$distance = $vector->length();
-			$oneMinusDistance = (1 - $distance) ** 2;
+			$distance = $vector->lengthSquared();
+			if($distance < 1){
+				$diff = $vector->normalize()->multiply(0.2 * (1 - sqrt($distance)) ** 2);
 
-			if($oneMinusDistance > 0){
-				$this->motionX += $vector->x / $distance * $oneMinusDistance * 0.2;
-				$this->motionY += $vector->y / $distance * $oneMinusDistance * 0.2;
-				$this->motionZ += $vector->z / $distance * $oneMinusDistance * 0.2;
+				$this->motion->x += $diff->x;
+				$this->motion->y += $diff->y;
+				$this->motion->z += $diff->z;
 			}
 
 			if($currentTarget->canPickupXp() and $this->boundingBox->intersectsWith($currentTarget->getBoundingBox())){
 				$this->flagForDespawn();
 
-				$currentTarget->addXp($this->getXpValue());
-				$currentTarget->resetXpCooldown();
-
-				//TODO: check Mending enchantment
+				$currentTarget->onPickupXp($this->getXpValue());
 			}
 		}
 
 		return $hasUpdate;
 	}
 
-	protected function tryChangeMovement(){
+	protected function tryChangeMovement() : void{
 		$this->checkObstruction($this->x, $this->y, $this->z);
 		parent::tryChangeMovement();
 	}

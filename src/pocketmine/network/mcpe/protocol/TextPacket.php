@@ -27,6 +27,7 @@ namespace pocketmine\network\mcpe\protocol;
 
 
 use pocketmine\network\mcpe\NetworkSession;
+use function count;
 
 class TextPacket extends DataPacket{
 	public const NETWORK_ID = ProtocolInfo::TEXT_PACKET;
@@ -48,10 +49,6 @@ class TextPacket extends DataPacket{
 	/** @var string */
 	public $sourceName;
 	/** @var string */
-	public $sourceThirdPartyName = "";
-	/** @var int */
-	public $sourcePlatform = 0;
-	/** @var string */
 	public $message;
 	/** @var string[] */
 	public $parameters = [];
@@ -69,8 +66,6 @@ class TextPacket extends DataPacket{
 			/** @noinspection PhpMissingBreakStatementInspection */
 			case self::TYPE_ANNOUNCEMENT:
 				$this->sourceName = $this->getString();
-				$this->sourceThirdPartyName = $this->getString();
-				$this->sourcePlatform = $this->getVarInt();
 			case self::TYPE_RAW:
 			case self::TYPE_TIP:
 			case self::TYPE_SYSTEM:
@@ -101,8 +96,6 @@ class TextPacket extends DataPacket{
 			/** @noinspection PhpMissingBreakStatementInspection */
 			case self::TYPE_ANNOUNCEMENT:
 				$this->putString($this->sourceName);
-				$this->putString($this->sourceThirdPartyName);
-				$this->putVarInt($this->sourcePlatform);
 			case self::TYPE_RAW:
 			case self::TYPE_TIP:
 			case self::TYPE_SYSTEM:
@@ -127,5 +120,4 @@ class TextPacket extends DataPacket{
 	public function handle(NetworkSession $session) : bool{
 		return $session->handleText($this);
 	}
-
 }

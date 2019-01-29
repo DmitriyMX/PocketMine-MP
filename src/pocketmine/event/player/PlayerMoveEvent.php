@@ -34,7 +34,7 @@ class PlayerMoveEvent extends PlayerEvent implements Cancellable{
 	private $to;
 
 	/**
-	 * @param Player $player
+	 * @param Player   $player
 	 * @param Location $from
 	 * @param Location $to
 	 */
@@ -61,7 +61,7 @@ class PlayerMoveEvent extends PlayerEvent implements Cancellable{
 	/**
 	 * @param Location $to
 	 */
-	public function setTo(Location $to){
+	public function setTo(Location $to) : void{
 		$this->to = $to;
 	}
 }

@@ -24,49 +24,6 @@ declare(strict_types=1);
 namespace {
 	const INT32_MIN = -0x80000000;
 	const INT32_MAX = 0x7fffffff;
-
-	function safe_var_dump(){
-		static $cnt = 0;
-		foreach(func_get_args() as $var){
-			switch(true){
-				case is_array($var):
-					echo str_repeat("  ", $cnt) . "array(" . count($var) . ") {" . PHP_EOL;
-					foreach($var as $key => $value){
-						echo str_repeat("  ", $cnt + 1) . "[" . (is_int($key) ? $key : '"' . $key . '"') . "]=>" . PHP_EOL;
-						++$cnt;
-						safe_var_dump($value);
-						--$cnt;
-					}
-					echo str_repeat("  ", $cnt) . "}" . PHP_EOL;
-					break;
-				case is_int($var):
-					echo str_repeat("  ", $cnt) . "int(" . $var . ")" . PHP_EOL;
-					break;
-				case is_float($var):
-					echo str_repeat("  ", $cnt) . "float(" . $var . ")" . PHP_EOL;
-					break;
-				case is_bool($var):
-					echo str_repeat("  ", $cnt) . "bool(" . ($var === true ? "true" : "false") . ")" . PHP_EOL;
-					break;
-				case is_string($var):
-					echo str_repeat("  ", $cnt) . "string(" . strlen($var) . ") \"$var\"" . PHP_EOL;
-					break;
-				case is_resource($var):
-					echo str_repeat("  ", $cnt) . "resource() of type (" . get_resource_type($var) . ")" . PHP_EOL;
-					break;
-				case is_object($var):
-					echo str_repeat("  ", $cnt) . "object(" . get_class($var) . ")" . PHP_EOL;
-					break;
-				case is_null($var):
-					echo str_repeat("  ", $cnt) . "NULL" . PHP_EOL;
-					break;
-			}
-		}
-	}
-
-	function dummy(){
-
-	}
 }
 
 namespace pocketmine {
@@ -76,13 +33,13 @@ namespace pocketmine {
 	use pocketmine\utils\Terminal;
 	use pocketmine\utils\Timezone;
 	use pocketmine\utils\Utils;
+	use pocketmine\utils\VersionString;
 	use pocketmine\wizard\SetupWizard;
-	use raklib\RakLib;
 
 	const NAME = "PocketMine-MP";
-	const VERSION = "1.7dev";
-	const API_VERSION = "3.0.0-ALPHA11";
-	const CODENAME = "[REDACTED]";
+	const BASE_VERSION = "3.5.8";
+	const IS_DEVELOPMENT_BUILD = true;
+	const BUILD_NUMBER = 0;
 
 	const MIN_PHP_VERSION = "7.2.0";
 
@@ -96,88 +53,91 @@ namespace pocketmine {
 	 * Enjoy it as much as I did writing it. I don't want to do it again.
 	 */
 
-	if(version_compare(MIN_PHP_VERSION, PHP_VERSION) > 0){
-		critical_error(\pocketmine\NAME . " requires PHP >= " . MIN_PHP_VERSION . ", but you have PHP " . PHP_VERSION . ".");
-		critical_error("Please use the installer provided on the homepage, or update to a newer PHP version.");
+	/**
+	 * @return string[]
+	 */
+	function check_platform_dependencies(){
+		if(version_compare(MIN_PHP_VERSION, PHP_VERSION) > 0){
+			//If PHP version isn't high enough, anything below might break, so don't bother checking it.
+			return [
+				\pocketmine\NAME . " requires PHP >= " . MIN_PHP_VERSION . ", but you have PHP " . PHP_VERSION . "."
+			];
+		}
+
+		$messages = [];
+
+		if(PHP_INT_SIZE < 8){
+			$messages[] = "Running " . \pocketmine\NAME . " with 32-bit systems/PHP is no longer supported. Please upgrade to a 64-bit system, or use a 64-bit PHP binary if this is a 64-bit system.";
+		}
+
+		if(php_sapi_name() !== "cli"){
+			$messages[] = "You must run " . \pocketmine\NAME . " using the CLI.";
+		}
+
+		$extensions = [
+			"bcmath" => "BC Math",
+			"curl" => "cURL",
+			"ctype" => "ctype",
+			"date" => "Date",
+			"hash" => "Hash",
+			"json" => "JSON",
+			"mbstring" => "Multibyte String",
+			"openssl" => "OpenSSL",
+			"pcre" => "PCRE",
+			"phar" => "Phar",
+			"pthreads" => "pthreads",
+			"reflection" => "Reflection",
+			"sockets" => "Sockets",
+			"spl" => "SPL",
+			"yaml" => "YAML",
+			"zip" => "Zip",
+			"zlib" => "Zlib"
+		];
+
+		foreach($extensions as $ext => $name){
+			if(!extension_loaded($ext)){
+				$messages[] = "Unable to find the $name ($ext) extension.";
+			}
+		}
+
+		if(extension_loaded("pthreads")){
+			$pthreads_version = phpversion("pthreads");
+			if(substr_count($pthreads_version, ".") < 2){
+				$pthreads_version = "0.$pthreads_version";
+			}
+			if(version_compare($pthreads_version, "3.1.7dev") < 0){
+				$messages[] = "pthreads >= 3.1.7dev is required, while you have $pthreads_version.";
+			}
+		}
+
+		if(extension_loaded("leveldb")){
+			$leveldb_version = phpversion("leveldb");
+			if(version_compare($leveldb_version, "0.2.1") < 0){
+				$messages[] = "php-leveldb >= 0.2.1 is required, while you have $leveldb_version.";
+			}
+		}
+
+		if(extension_loaded("pocketmine")){
+			$messages[] = "The native PocketMine extension is no longer supported.";
+		}
+
+		return $messages;
+	}
+
+	if(!empty($messages = check_platform_dependencies())){
+		echo PHP_EOL;
+		$binary = version_compare(PHP_VERSION, "5.4") >= 0 ? PHP_BINARY : "unknown";
+		critical_error("Selected PHP binary ($binary) does not satisfy some requirements.");
+		foreach($messages as $m){
+			echo " - $m" . PHP_EOL;
+		}
+		critical_error("Please recompile PHP with the needed configuration, or refer to the installation instructions at http://pmmp.rtfd.io/en/rtfd/installation.html.");
+		echo PHP_EOL;
 		exit(1);
 	}
-
-	if(PHP_INT_SIZE < 8){
-		critical_error("Running " . \pocketmine\NAME . " with 32-bit systems/PHP is no longer supported.");
-		critical_error("Please upgrade to a 64-bit system, or use a 64-bit PHP binary if this is a 64-bit system.");
-		exit(1);
-	}
-
-	/* Dependencies check */
-
-	$errors = 0;
-
-	if(php_sapi_name() !== "cli"){
-		critical_error("You must run " . \pocketmine\NAME . " using the CLI.");
-		++$errors;
-	}
-
-	$extensions = [
-		"bcmath" => "BC Math",
-		"curl" => "cURL",
-		"json" => "JSON",
-		"mbstring" => "Multibyte String",
-		"openssl" => "OpenSSL",
-		"phar" => "Phar",
-		"pthreads" => "pthreads",
-		"sockets" => "Sockets",
-		"yaml" => "YAML",
-		"zip" => "Zip",
-		"zlib" => "Zlib"
-	];
-
-	foreach($extensions as $ext => $name){
-		if(!extension_loaded($ext)){
-			critical_error("Unable to find the $name ($ext) extension.");
-			++$errors;
-		}
-	}
-
-	if(extension_loaded("pthreads")){
-		$pthreads_version = phpversion("pthreads");
-		if(substr_count($pthreads_version, ".") < 2){
-			$pthreads_version = "0.$pthreads_version";
-		}
-		if(version_compare($pthreads_version, "3.1.7-dev") < 0){
-			critical_error("pthreads >= 3.1.7-dev is required, while you have $pthreads_version.");
-			++$errors;
-		}
-	}
-
-	if(extension_loaded("leveldb")){
-		$leveldb_version = phpversion("leveldb");
-		if(version_compare($leveldb_version, "0.2.1") < 0){
-			critical_error("php-leveldb >= 0.2.1 is required, while you have $leveldb_version");
-			++$errors;
-		}
-	}
-
-	if(extension_loaded("pocketmine")){
-		critical_error("The native PocketMine extension is no longer supported.");
-		++$errors;
-	}
-
-	if($errors > 0){
-		critical_error("Please use the installer provided on the homepage, or recompile PHP again.");
-		exit(1);
-	}
+	unset($messages);
 
 	error_reporting(-1);
-
-	function error_handler($severity, $message, $file, $line){
-		if(error_reporting() & $severity){
-			throw new \ErrorException($message, 0, $severity, $file, $line);
-		}else{ //stfu operator
-			return true;
-		}
-	}
-
-	set_error_handler('\pocketmine\error_handler');
 
 	if(\Phar::running(true) !== ""){
 		define('pocketmine\PATH', \Phar::running(true) . "/");
@@ -185,29 +145,23 @@ namespace pocketmine {
 		define('pocketmine\PATH', dirname(__FILE__, 3) . DIRECTORY_SEPARATOR);
 	}
 
-	define('pocketmine\COMPOSER_AUTOLOADER_PATH', \pocketmine\PATH . 'vendor/autoload.php');
+	$opts = getopt("", ["bootstrap:"]);
+	if(isset($opts["bootstrap"])){
+		$bootstrap = realpath($opts["bootstrap"]) ?: $opts["bootstrap"];
+	}else{
+		$bootstrap = \pocketmine\PATH . 'vendor/autoload.php';
+	}
+	define('pocketmine\COMPOSER_AUTOLOADER_PATH', $bootstrap);
 
-	function composer_error_die($message){
-		critical_error($message);
+	if(\pocketmine\COMPOSER_AUTOLOADER_PATH !== false and is_file(\pocketmine\COMPOSER_AUTOLOADER_PATH)){
+		require_once(\pocketmine\COMPOSER_AUTOLOADER_PATH);
+	}else{
+		critical_error("Composer autoloader not found at " . $bootstrap);
 		critical_error("Please install/update Composer dependencies or use provided builds.");
 		exit(1);
 	}
 
-	if(is_file(\pocketmine\COMPOSER_AUTOLOADER_PATH)){
-		require_once(\pocketmine\COMPOSER_AUTOLOADER_PATH);
-	}else{
-		composer_error_die("Composer autoloader not found.");
-	}
-
-	if(!class_exists(RakLib::class)){
-		composer_error_die("Unable to find the RakLib library.");
-	}
-	if(version_compare(RakLib::VERSION, "0.9.0") < 0){ //TODO: remove this check (it's managed by Composer now)
-		composer_error_die("RakLib version 0.9.0 is required, while you have version " . RakLib::VERSION . ".");
-	}
-	if(!class_exists(\BaseClassLoader::class)){
-		composer_error_die("Unable to find the PocketMine-SPL library.");
-	}
+	set_error_handler([Utils::class, 'errorExceptionHandler']);
 
 	/*
 	 * We now use the Composer autoloader, but this autoloader is still for loading plugins.
@@ -227,14 +181,10 @@ namespace pocketmine {
 
 	define('pocketmine\RESOURCE_PATH', \pocketmine\PATH . 'src' . DIRECTORY_SEPARATOR . 'pocketmine' . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR);
 
-	$opts = getopt("", ["data:", "plugins:", "no-wizard", "enable-profiler"]);
+	$opts = getopt("", ["data:", "plugins:", "no-wizard"]);
 
-	define('pocketmine\DATA', isset($opts["data"]) ? $opts["data"] . DIRECTORY_SEPARATOR : \realpath(\getcwd()) . DIRECTORY_SEPARATOR);
-	define('pocketmine\PLUGIN_PATH', isset($opts["plugins"]) ? $opts["plugins"] . DIRECTORY_SEPARATOR : \realpath(\getcwd()) . DIRECTORY_SEPARATOR . "plugins" . DIRECTORY_SEPARATOR);
-
-	Terminal::init();
-
-	define('pocketmine\ANSI', Terminal::hasFormattingCodes());
+	define('pocketmine\DATA', isset($opts["data"]) ? $opts["data"] . DIRECTORY_SEPARATOR : realpath(getcwd()) . DIRECTORY_SEPARATOR);
+	define('pocketmine\PLUGIN_PATH', isset($opts["plugins"]) ? $opts["plugins"] . DIRECTORY_SEPARATOR : realpath(getcwd()) . DIRECTORY_SEPARATOR . "plugins" . DIRECTORY_SEPARATOR);
 
 	if(!file_exists(\pocketmine\DATA)){
 		mkdir(\pocketmine\DATA, 0777, true);
@@ -251,15 +201,6 @@ namespace pocketmine {
 	}
 	unset($tzError);
 
-	if(isset($opts["enable-profiler"])){
-		if(function_exists("profiler_enable")){
-			\profiler_enable();
-			$logger->notice("Execution is being profiled");
-		}else{
-			$logger->notice("No profiler found. Please install https://github.com/krakjoe/profiler");
-		}
-	}
-
 	if(extension_loaded("xdebug")){
 		$logger->warning(PHP_EOL . PHP_EOL . PHP_EOL . "\tYou are running " . \pocketmine\NAME . " with xdebug enabled. This has a major impact on performance." . PHP_EOL . PHP_EOL);
 	}
@@ -268,10 +209,13 @@ namespace pocketmine {
 		$logger->warning("Non-packaged " . \pocketmine\NAME . " installation detected. Consider using a phar in production for better performance.");
 	}
 
+	$version = new VersionString(\pocketmine\BASE_VERSION, \pocketmine\IS_DEVELOPMENT_BUILD, \pocketmine\BUILD_NUMBER);
+	define('pocketmine\VERSION', $version->getFullVersion(true));
+
 	$gitHash = str_repeat("00", 20);
 
 	if(\Phar::running(true) === ""){
-		if(Utils::execute("git rev-parse HEAD", $out) === 0){
+		if(Utils::execute("git rev-parse HEAD", $out) === 0 and $out !== false and strlen($out = trim($out)) === 40){
 			$gitHash = trim($out);
 			if(Utils::execute("git diff --quiet") === 1 or Utils::execute("git diff --cached --quiet") === 1){ //Locally-modified
 				$gitHash .= "-dirty";

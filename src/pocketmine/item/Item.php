@@ -43,7 +43,15 @@ use pocketmine\nbt\tag\ShortTag;
 use pocketmine\nbt\tag\StringTag;
 use pocketmine\Player;
 use pocketmine\utils\Binary;
-use pocketmine\utils\Config;
+use function array_map;
+use function base64_decode;
+use function base64_encode;
+use function bin2hex;
+use function file_get_contents;
+use function get_class;
+use function hex2bin;
+use function json_decode;
+use const DIRECTORY_SEPARATOR;
 
 class Item implements ItemIds, \JsonSerializable{
 	public const TAG_ENCH = "ench";
@@ -119,9 +127,9 @@ class Item implements ItemIds, \JsonSerializable{
 	public static function initCreativeItems(){
 		self::clearCreativeItems();
 
-		$creativeItems = new Config(\pocketmine\RESOURCE_PATH . "creativeitems.json", Config::JSON, []);
+		$creativeItems = json_decode(file_get_contents(\pocketmine\RESOURCE_PATH . "vanilla" . DIRECTORY_SEPARATOR . "creativeitems.json"), true);
 
-		foreach($creativeItems->getAll() as $data){
+		foreach($creativeItems as $data){
 			$item = Item::jsonDeserialize($data);
 			if($item->getName() === "Unknown"){
 				continue;
@@ -154,7 +162,7 @@ class Item implements ItemIds, \JsonSerializable{
 	}
 
 	/**
-	 * @param $index
+	 * @param int $index
 	 *
 	 * @return Item|null
 	 */
@@ -164,7 +172,7 @@ class Item implements ItemIds, \JsonSerializable{
 
 	public static function getCreativeItemIndex(Item $item) : int{
 		foreach(Item::$creative as $i => $d){
-			if($item->equals($d, !$item->isTool())){
+			if($item->equals($d, !($item instanceof Durable))){
 				return $i;
 			}
 		}
@@ -197,7 +205,10 @@ class Item implements ItemIds, \JsonSerializable{
 	 * @param string $name
 	 */
 	public function __construct(int $id, int $meta = 0, string $name = "Unknown"){
-		$this->id = $id & 0xffff;
+		if($id < -0x8000 or $id > 0x7fff){ //signed short range
+			throw new \InvalidArgumentException("ID must be in range " . -0x8000 . " - " . 0x7fff);
+		}
+		$this->id = $id;
 		$this->setDamage($meta);
 		$this->name = $name;
 	}
@@ -521,6 +532,7 @@ class Item implements ItemIds, \JsonSerializable{
 
 	/**
 	 * @param string $name
+	 *
 	 * @return NamedTag|null
 	 */
 	public function getNamedTagEntry(string $name) : ?NamedTag{
@@ -555,6 +567,7 @@ class Item implements ItemIds, \JsonSerializable{
 
 	/**
 	 * Sets the Item's NBT from the supplied CompoundTag object.
+	 *
 	 * @param CompoundTag $tag
 	 *
 	 * @return Item
@@ -587,6 +600,7 @@ class Item implements ItemIds, \JsonSerializable{
 
 	/**
 	 * @param int $count
+	 *
 	 * @return Item
 	 */
 	public function setCount(int $count) : Item{
@@ -597,19 +611,21 @@ class Item implements ItemIds, \JsonSerializable{
 
 	/**
 	 * Pops an item from the stack and returns it, decreasing the stack count of this item stack by one.
-	 * @return Item
 	 *
-	 * @throws \InvalidStateException if the count is less than or equal to zero, or if the stack is air.
+	 * @param int $count
+	 *
+	 * @return Item
+	 * @throws \InvalidArgumentException if trying to pop more items than are on the stack
 	 */
-	public function pop() : Item{
-		if($this->isNull()){
-			throw new \InvalidStateException("Cannot pop an item from a null stack");
+	public function pop(int $count = 1) : Item{
+		if($count > $this->count){
+			throw new \InvalidArgumentException("Cannot pop $count items from a stack of $this->count");
 		}
 
 		$item = clone $this;
-		$item->setCount(1);
+		$item->count = $count;
 
-		$this->count--;
+		$this->count -= $count;
 
 		return $item;
 	}
@@ -665,6 +681,7 @@ class Item implements ItemIds, \JsonSerializable{
 
 	/**
 	 * @param int $meta
+	 *
 	 * @return Item
 	 */
 	public function setDamage(int $meta) : Item{
@@ -716,22 +733,6 @@ class Item implements ItemIds, \JsonSerializable{
 	}
 
 	/**
-	 * @param Entity|Block $object
-	 *
-	 * @return bool
-	 */
-	public function useOn($object){
-		return false;
-	}
-
-	/**
-	 * @return bool
-	 */
-	public function isTool(){
-		return false;
-	}
-
-	/**
 	 * Returns what type of block-breaking tool this is. Blocks requiring the same tool type as the item will break
 	 * faster (except for blocks requiring no tool, which break at the same speed regardless of the tool used)
 	 *
@@ -752,30 +753,6 @@ class Item implements ItemIds, \JsonSerializable{
 	 */
 	public function getBlockToolHarvestLevel() : int{
 		return 0;
-	}
-
-	public function isPickaxe(){
-		return false;
-	}
-
-	public function isAxe(){
-		return false;
-	}
-
-	public function isSword(){
-		return false;
-	}
-
-	public function isShovel(){
-		return false;
-	}
-
-	public function isHoe(){
-		return false;
-	}
-
-	public function isShears(){
-		return false;
 	}
 
 	public function getMiningEfficiency(Block $block) : float{
@@ -815,9 +792,32 @@ class Item implements ItemIds, \JsonSerializable{
 	 * Returns whether the item was changed, for example count decrease or durability change.
 	 *
 	 * @param Player $player
+	 *
 	 * @return bool
 	 */
 	public function onReleaseUsing(Player $player) : bool{
+		return false;
+	}
+
+	/**
+	 * Called when this item is used to destroy a block. Usually used to update durability.
+	 *
+	 * @param Block $block
+	 *
+	 * @return bool
+	 */
+	public function onDestroyBlock(Block $block) : bool{
+		return false;
+	}
+
+	/**
+	 * Called when this item is used to attack an entity. Usually used to update durability.
+	 *
+	 * @param Entity $victim
+	 *
+	 * @return bool
+	 */
+	public function onAttackEntity(Entity $victim) : bool{
 		return false;
 	}
 
@@ -858,6 +858,7 @@ class Item implements ItemIds, \JsonSerializable{
 
 	/**
 	 * Returns whether the specified item stack has the same ID, damage, NBT and count as this item stack.
+	 *
 	 * @param Item $other
 	 *
 	 * @return bool
@@ -892,7 +893,7 @@ class Item implements ItemIds, \JsonSerializable{
 		}
 
 		if($this->hasCompoundTag()){
-			$data["nbt_hex"] = bin2hex($this->getCompoundTag());
+			$data["nbt_b64"] = base64_encode($this->getCompoundTag());
 		}
 
 		return $data;
@@ -902,14 +903,25 @@ class Item implements ItemIds, \JsonSerializable{
 	 * Returns an Item from properties created in an array by {@link Item#jsonSerialize}
 	 *
 	 * @param array $data
+	 *
 	 * @return Item
 	 */
 	final public static function jsonDeserialize(array $data) : Item{
+		$nbt = "";
+
+		//Backwards compatibility
+		if(isset($data["nbt"])){
+			$nbt = $data["nbt"];
+		}elseif(isset($data["nbt_hex"])){
+			$nbt = hex2bin($data["nbt_hex"]);
+		}elseif(isset($data["nbt_b64"])){
+			$nbt = base64_decode($data["nbt_b64"], true);
+		}
 		return ItemFactory::get(
 			(int) $data["id"],
 			(int) ($data["damage"] ?? 0),
 			(int) ($data["count"] ?? 1),
-			(string) ($data["nbt"] ?? (isset($data["nbt_hex"]) ? hex2bin($data["nbt_hex"]) : "")) //`nbt` key might contain old raw data
+			(string) $nbt
 		);
 	}
 
@@ -923,7 +935,7 @@ class Item implements ItemIds, \JsonSerializable{
 	 */
 	public function nbtSerialize(int $slot = -1, string $tagName = "") : CompoundTag{
 		$result = new CompoundTag($tagName, [
-			new ShortTag("id", Binary::signShort($this->id)),
+			new ShortTag("id", $this->id),
 			new ByteTag("Count", Binary::signByte($this->count)),
 			new ShortTag("Damage", $this->meta)
 		]);
@@ -958,9 +970,14 @@ class Item implements ItemIds, \JsonSerializable{
 
 		$idTag = $tag->getTag("id");
 		if($idTag instanceof ShortTag){
-			$item = ItemFactory::get(Binary::unsignShort($idTag->getValue()), $meta, $count);
+			$item = ItemFactory::get($idTag->getValue(), $meta, $count);
 		}elseif($idTag instanceof StringTag){ //PC item save format
-			$item = ItemFactory::fromString($idTag->getValue());
+			try{
+				$item = ItemFactory::fromString($idTag->getValue());
+			}catch(\InvalidArgumentException $e){
+				//TODO: improve error handling
+				return ItemFactory::get(Item::AIR, 0, 0);
+			}
 			$item->setDamage($meta);
 			$item->setCount($count);
 		}else{
@@ -981,5 +998,4 @@ class Item implements ItemIds, \JsonSerializable{
 	public function __clone(){
 		$this->cachedNBT = null;
 	}
-
 }

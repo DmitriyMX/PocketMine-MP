@@ -30,8 +30,10 @@ use pocketmine\network\mcpe\protocol\InventoryContentPacket;
 use pocketmine\network\mcpe\protocol\MobEquipmentPacket;
 use pocketmine\network\mcpe\protocol\types\ContainerIds;
 use pocketmine\Player;
+use function in_array;
+use function is_array;
 
-class PlayerInventory extends EntityInventory{
+class PlayerInventory extends BaseInventory{
 
 	/** @var Human */
 	protected $holder;
@@ -43,7 +45,8 @@ class PlayerInventory extends EntityInventory{
 	 * @param Human $player
 	 */
 	public function __construct(Human $player){
-		parent::__construct($player);
+		$this->holder = $player;
+		parent::__construct();
 	}
 
 	public function getName() : string{
@@ -68,7 +71,8 @@ class PlayerInventory extends EntityInventory{
 			return false;
 		}
 
-		$this->getHolder()->getLevel()->getServer()->getPluginManager()->callEvent($ev = new PlayerItemHeldEvent($this->getHolder(), $this->getItem($hotbarSlot), $hotbarSlot));
+		$ev = new PlayerItemHeldEvent($this->getHolder(), $this->getItem($hotbarSlot), $hotbarSlot);
+		$ev->call();
 
 		if($ev->isCancelled()){
 			$this->sendHeldItem($this->getHolder());
@@ -86,6 +90,7 @@ class PlayerInventory extends EntityInventory{
 
 	/**
 	 * @param int $slot
+	 *
 	 * @throws \InvalidArgumentException
 	 */
 	private function throwIfNotHotbarSlot(int $slot){
@@ -98,6 +103,7 @@ class PlayerInventory extends EntityInventory{
 	 * Returns the item in the specified hotbar slot.
 	 *
 	 * @param int $hotbarSlot
+	 *
 	 * @return Item
 	 *
 	 * @throws \InvalidArgumentException if the hotbar slot index is out of range
@@ -158,6 +164,7 @@ class PlayerInventory extends EntityInventory{
 
 	/**
 	 * Sends the currently-held item to specified targets.
+	 *
 	 * @param Player|Player[] $target
 	 */
 	public function sendHeldItem($target){
@@ -191,16 +198,21 @@ class PlayerInventory extends EntityInventory{
 	}
 
 	public function sendCreativeContents(){
+		//TODO: this mess shouldn't be in here
+		$holder = $this->getHolder();
+		if(!($holder instanceof Player)){
+			throw new \LogicException("Cannot send creative inventory contents to non-player inventory holder");
+		}
 		$pk = new InventoryContentPacket();
 		$pk->windowId = ContainerIds::CREATIVE;
 
-		if(!$this->getHolder()->isSpectator()){ //fill it for all gamemodes except spectator
+		if(!$holder->isSpectator()){ //fill it for all gamemodes except spectator
 			foreach(Item::getCreativeItems() as $i => $item){
 				$pk->items[$i] = clone $item;
 			}
 		}
 
-		$this->getHolder()->dataPacket($pk);
+		$holder->dataPacket($pk);
 	}
 
 	/**
@@ -210,5 +222,4 @@ class PlayerInventory extends EntityInventory{
 	public function getHolder(){
 		return $this->holder;
 	}
-
 }

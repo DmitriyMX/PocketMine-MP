@@ -27,11 +27,18 @@ namespace pocketmine\network\mcpe\protocol;
 
 
 use pocketmine\math\Vector3;
+use pocketmine\network\mcpe\NetworkBinaryStream;
 use pocketmine\network\mcpe\NetworkSession;
 use pocketmine\network\mcpe\protocol\types\PlayerPermissions;
+use function count;
+use function file_get_contents;
+use function json_decode;
 
 class StartGamePacket extends DataPacket{
 	public const NETWORK_ID = ProtocolInfo::START_GAME_PACKET;
+
+	/** @var string|null */
+	private static $runtimeIdTable;
 
 	/** @var int */
 	public $entityUniqueId;
@@ -60,7 +67,7 @@ class StartGamePacket extends DataPacket{
 	public $difficulty;
 	/** @var int */
 	public $spawnX;
-	/** @var int*/
+	/** @var int */
 	public $spawnY;
 	/** @var int */
 	public $spawnZ;
@@ -70,6 +77,8 @@ class StartGamePacket extends DataPacket{
 	public $time = -1;
 	/** @var bool */
 	public $eduMode = false;
+	/** @var bool */
+	public $hasEduFeaturesEnabled = false;
 	/** @var float */
 	public $rainLevel;
 	/** @var float */
@@ -104,6 +113,18 @@ class StartGamePacket extends DataPacket{
 	public $platformBroadcastMode = 0;
 	/** @var bool */
 	public $xboxLiveBroadcastIntent = false;
+	/** @var bool */
+	public $hasLockedBehaviorPack = false;
+	/** @var bool */
+	public $hasLockedResourcePack = false;
+	/** @var bool */
+	public $isFromLockedWorldTemplate = false;
+	/** @var bool */
+	public $useMsaGamertagsOnly = false;
+	/** @var bool */
+	public $isFromWorldTemplate = false;
+	/** @var bool */
+	public $isWorldTemplateOptionLocked = false;
 
 	/** @var string */
 	public $levelId = ""; //base64 string, usually the same as world folder name in vanilla
@@ -117,6 +138,8 @@ class StartGamePacket extends DataPacket{
 	public $currentTick = 0; //only used if isTrial is true
 	/** @var int */
 	public $enchantmentSeed = 0;
+	/** @var string */
+	public $multiplayerCorrelationId = ""; //TODO: this should be filled with a UUID of some sort
 
 	protected function decodePayload(){
 		$this->entityUniqueId = $this->getEntityUniqueId();
@@ -138,6 +161,7 @@ class StartGamePacket extends DataPacket{
 		$this->hasAchievementsDisabled = $this->getBool();
 		$this->time = $this->getVarInt();
 		$this->eduMode = $this->getBool();
+		$this->hasEduFeaturesEnabled = $this->getBool();
 		$this->rainLevel = $this->getLFloat();
 		$this->lightningLevel = $this->getLFloat();
 		$this->isMultiplayerGame = $this->getBool();
@@ -153,8 +177,14 @@ class StartGamePacket extends DataPacket{
 		$this->xboxLiveBroadcastMode = $this->getVarInt();
 		$this->serverChunkTickRadius = $this->getLInt();
 		$this->hasPlatformBroadcast = $this->getBool();
-		$this->platformBroadcastMode = $this->getUnsignedVarInt();
+		$this->platformBroadcastMode = $this->getVarInt();
 		$this->xboxLiveBroadcastIntent = $this->getBool();
+		$this->hasLockedBehaviorPack = $this->getBool();
+		$this->hasLockedResourcePack = $this->getBool();
+		$this->isFromLockedWorldTemplate = $this->getBool();
+		$this->useMsaGamertagsOnly = $this->getBool();
+		$this->isFromWorldTemplate = $this->getBool();
+		$this->isWorldTemplateOptionLocked = $this->getBool();
 
 		$this->levelId = $this->getString();
 		$this->worldName = $this->getString();
@@ -163,6 +193,14 @@ class StartGamePacket extends DataPacket{
 		$this->currentTick = $this->getLLong();
 
 		$this->enchantmentSeed = $this->getVarInt();
+
+		$count = $this->getUnsignedVarInt();
+		for($i = 0; $i < $count; ++$i){
+			$this->getString();
+			$this->getLShort();
+		}
+
+		$this->multiplayerCorrelationId = $this->getString();
 	}
 
 	protected function encodePayload(){
@@ -185,6 +223,7 @@ class StartGamePacket extends DataPacket{
 		$this->putBool($this->hasAchievementsDisabled);
 		$this->putVarInt($this->time);
 		$this->putBool($this->eduMode);
+		$this->putBool($this->hasEduFeaturesEnabled);
 		$this->putLFloat($this->rainLevel);
 		$this->putLFloat($this->lightningLevel);
 		$this->putBool($this->isMultiplayerGame);
@@ -200,8 +239,14 @@ class StartGamePacket extends DataPacket{
 		$this->putVarInt($this->xboxLiveBroadcastMode);
 		$this->putLInt($this->serverChunkTickRadius);
 		$this->putBool($this->hasPlatformBroadcast);
-		$this->putUnsignedVarInt($this->platformBroadcastMode);
+		$this->putVarInt($this->platformBroadcastMode);
 		$this->putBool($this->xboxLiveBroadcastIntent);
+		$this->putBool($this->hasLockedBehaviorPack);
+		$this->putBool($this->hasLockedResourcePack);
+		$this->putBool($this->isFromLockedWorldTemplate);
+		$this->putBool($this->useMsaGamertagsOnly);
+		$this->putBool($this->isFromWorldTemplate);
+		$this->putBool($this->isWorldTemplateOptionLocked);
 
 		$this->putString($this->levelId);
 		$this->putString($this->worldName);
@@ -210,10 +255,24 @@ class StartGamePacket extends DataPacket{
 		$this->putLLong($this->currentTick);
 
 		$this->putVarInt($this->enchantmentSeed);
+
+		if(self::$runtimeIdTable === null){
+			//this is a really nasty hack, but it'll do for now
+			$stream = new NetworkBinaryStream();
+			$data = json_decode(file_get_contents(\pocketmine\RESOURCE_PATH . "runtimeid_table.json"), true);
+			$stream->putUnsignedVarInt(count($data));
+			foreach($data as $v){
+				$stream->putString($v["name"]);
+				$stream->putLShort($v["data"]);
+			}
+			self::$runtimeIdTable = $stream->buffer;
+		}
+		$this->put(self::$runtimeIdTable);
+
+		$this->putString($this->multiplayerCorrelationId);
 	}
 
 	public function handle(NetworkSession $session) : bool{
 		return $session->handleStartGame($this);
 	}
-
 }

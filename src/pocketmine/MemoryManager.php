@@ -27,8 +27,40 @@ use pocketmine\event\server\LowMemoryEvent;
 use pocketmine\scheduler\DumpWorkerMemoryTask;
 use pocketmine\scheduler\GarbageCollectionTask;
 use pocketmine\timings\Timings;
-use pocketmine\utils\MainLogger;
 use pocketmine\utils\Utils;
+use function arsort;
+use function count;
+use function fclose;
+use function file_exists;
+use function file_put_contents;
+use function fopen;
+use function fwrite;
+use function gc_collect_cycles;
+use function gc_disable;
+use function gc_enable;
+use function get_class;
+use function get_declared_classes;
+use function implode;
+use function ini_get;
+use function ini_set;
+use function is_array;
+use function is_object;
+use function is_resource;
+use function is_string;
+use function json_encode;
+use function min;
+use function mkdir;
+use function preg_match;
+use function print_r;
+use function round;
+use function spl_object_hash;
+use function sprintf;
+use function strlen;
+use function strtoupper;
+use function substr;
+use const JSON_PRETTY_PRINT;
+use const JSON_UNESCAPED_SLASHES;
+use const SORT_NUMERIC;
 
 class MemoryManager{
 
@@ -186,7 +218,7 @@ class MemoryManager{
 		}
 
 		$ev = new LowMemoryEvent($memory, $limit, $global, $triggerCount);
-		$this->server->getPluginManager()->callEvent($ev);
+		$ev->call();
 
 		$cycles = 0;
 		if($this->garbageCollectionTrigger){
@@ -243,9 +275,12 @@ class MemoryManager{
 		Timings::$garbageCollectorTimer->startTiming();
 
 		if($this->garbageCollectionAsync){
-			$size = $this->server->getScheduler()->getAsyncTaskPoolSize();
-			for($i = 0; $i < $size; ++$i){
-				$this->server->getScheduler()->scheduleAsyncTaskToWorker(new GarbageCollectionTask(), $i);
+			$pool = $this->server->getAsyncPool();
+			if(($w = $pool->shutdownUnusedWorkers()) > 0){
+				$this->server->getLogger()->debug("Shut down $w idle async pool workers");
+			}
+			foreach($pool->getRunningWorkers() as $i){
+				$pool->submitTaskToWorker(new GarbageCollectionTask(), $i);
 			}
 		}
 
@@ -264,13 +299,13 @@ class MemoryManager{
 	 * @param int    $maxStringSize
 	 */
 	public function dumpServerMemory(string $outputFolder, int $maxNesting, int $maxStringSize){
-		MainLogger::getLogger()->notice("[Dump] After the memory dump is done, the server might crash");
-		self::dumpMemory($this->server, $outputFolder, $maxNesting, $maxStringSize);
+		$this->server->getLogger()->notice("[Dump] After the memory dump is done, the server might crash");
+		self::dumpMemory($this->server, $outputFolder, $maxNesting, $maxStringSize, $this->server->getLogger());
 
 		if($this->dumpWorkers){
-			$scheduler = $this->server->getScheduler();
-			for($i = 0, $size = $scheduler->getAsyncTaskPoolSize(); $i < $size; ++$i){
-				$scheduler->scheduleAsyncTaskToWorker(new DumpWorkerMemoryTask($outputFolder, $maxNesting, $maxStringSize), $i);
+			$pool = $this->server->getAsyncPool();
+			foreach($pool->getRunningWorkers() as $i){
+				$pool->submitTaskToWorker(new DumpWorkerMemoryTask($outputFolder, $maxNesting, $maxStringSize), $i);
 			}
 		}
 	}
@@ -278,14 +313,15 @@ class MemoryManager{
 	/**
 	 * Static memory dumper accessible from any thread.
 	 *
-	 * @param mixed  $startingObject
-	 * @param string $outputFolder
-	 * @param int    $maxNesting
-	 * @param int    $maxStringSize
+	 * @param mixed   $startingObject
+	 * @param string  $outputFolder
+	 * @param int     $maxNesting
+	 * @param int     $maxStringSize
+	 * @param \Logger $logger
 	 *
 	 * @throws \ReflectionException
 	 */
-	public static function dumpMemory($startingObject, string $outputFolder, int $maxNesting, int $maxStringSize){
+	public static function dumpMemory($startingObject, string $outputFolder, int $maxNesting, int $maxStringSize, \Logger $logger){
 		$hardLimit = ini_get('memory_limit');
 		ini_set('memory_limit', '-1');
 		gc_disable();
@@ -329,7 +365,7 @@ class MemoryManager{
 		}
 
 		file_put_contents($outputFolder . "/staticProperties.js", json_encode($staticProperties, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
-		MainLogger::getLogger()->info("[Dump] Wrote $staticCount static properties");
+		$logger->info("[Dump] Wrote $staticCount static properties");
 
 		if(isset($GLOBALS)){ //This might be null if we're on a different thread
 			$globalVariables = [];
@@ -357,7 +393,7 @@ class MemoryManager{
 			}
 
 			file_put_contents($outputFolder . "/globalVariables.js", json_encode($globalVariables, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
-			MainLogger::getLogger()->info("[Dump] Wrote $globalCount global variables");
+			$logger->info("[Dump] Wrote $globalCount global variables");
 		}
 
 		self::continueDump($startingObject, $data, $objects, $refCounts, 0, $maxNesting, $maxStringSize);
@@ -394,15 +430,22 @@ class MemoryManager{
 					$info["implements"] = implode(", ", $reflection->getInterfaceNames());
 				}
 
-				foreach($reflection->getProperties() as $property){
-					if($property->isStatic()){
-						continue;
-					}
+				for($original = $reflection; $reflection !== false; $reflection = $reflection->getParentClass()){
+					foreach($reflection->getProperties() as $property){
+						if($property->isStatic()){
+							continue;
+						}
 
-					if(!$property->isPublic()){
-						$property->setAccessible(true);
+						$name = $property->getName();
+						if($reflection !== $original and !$property->isPublic()){
+							$name = $reflection->getName() . ":" . $name;
+						}
+						if(!$property->isPublic()){
+							$property->setAccessible(true);
+						}
+
+						self::continueDump($property->getValue($object), $info["properties"][$name], $objects, $refCounts, 0, $maxNesting, $maxStringSize);
 					}
-					self::continueDump($property->getValue($object), $info["properties"][$property->getName()], $objects, $refCounts, 0, $maxNesting, $maxStringSize);
 				}
 
 				fwrite($obData, "$hash@$className: " . json_encode($info, JSON_UNESCAPED_SLASHES) . "\n");
@@ -411,7 +454,7 @@ class MemoryManager{
 
 		}while($continue);
 
-		MainLogger::getLogger()->info("[Dump] Wrote " . count($objects) . " objects");
+		$logger->info("[Dump] Wrote " . count($objects) . " objects");
 
 		fclose($obData);
 
@@ -421,7 +464,7 @@ class MemoryManager{
 		arsort($instanceCounts, SORT_NUMERIC);
 		file_put_contents($outputFolder . "/instanceCounts.js", json_encode($instanceCounts, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
 
-		MainLogger::getLogger()->info("[Dump] Finished!");
+		$logger->info("[Dump] Finished!");
 
 		ini_set('memory_limit', $hardLimit);
 		gc_enable();
@@ -463,7 +506,7 @@ class MemoryManager{
 				self::continueDump($value, $data[$key], $objects, $refCounts, $recursion + 1, $maxNesting, $maxStringSize);
 			}
 		}elseif(is_string($from)){
-			$data = "(string) len(". strlen($from) .") " . substr(Utils::printable($from), 0, $maxStringSize);
+			$data = "(string) len(" . strlen($from) . ") " . substr(Utils::printable($from), 0, $maxStringSize);
 		}elseif(is_resource($from)){
 			$data = "(resource) " . print_r($from, true);
 		}else{

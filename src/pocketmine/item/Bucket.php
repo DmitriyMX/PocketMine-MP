@@ -57,9 +57,10 @@ class Bucket extends Item implements Consumable{
 			if($blockClicked instanceof Liquid and $blockClicked->getDamage() === 0){
 				$stack = clone $this;
 
-				$resultItem = $stack->pop();
-				$resultItem->setDamage($blockClicked->getFlowingForm()->getId());
-				$player->getServer()->getPluginManager()->callEvent($ev = new PlayerBucketFillEvent($player, $blockReplace, $face, $this, $resultItem));
+				$stack->pop();
+				$resultItem = ItemFactory::get(Item::BUCKET, $blockClicked->getFlowingForm()->getId());
+				$ev = new PlayerBucketFillEvent($player, $blockReplace, $face, $this, $resultItem);
+				$ev->call();
 				if(!$ev->isCancelled()){
 					$player->getLevel()->setBlock($blockClicked, BlockFactory::get(Block::AIR), true, true);
 					$player->getLevel()->broadcastLevelSoundEvent($blockClicked->add(0.5, 0.5, 0.5), $blockClicked->getBucketFillSound());
@@ -79,10 +80,9 @@ class Bucket extends Item implements Consumable{
 					$player->getInventory()->sendContents($player);
 				}
 			}
-		}elseif($resultBlock instanceof Liquid){
-			$resultItem = clone $this;
-			$resultItem->setDamage(0);
-			$player->getServer()->getPluginManager()->callEvent($ev = new PlayerBucketEmptyEvent($player, $blockReplace, $face, $this, $resultItem));
+		}elseif($resultBlock instanceof Liquid and $blockReplace->canBeReplaced()){
+			$ev = new PlayerBucketEmptyEvent($player, $blockReplace, $face, $this, ItemFactory::get(Item::BUCKET));
+			$ev->call();
 			if(!$ev->isCancelled()){
 				$player->getLevel()->setBlock($blockReplace, $resultBlock->getFlowingForm(), true, true);
 				$player->getLevel()->broadcastLevelSoundEvent($blockClicked->add(0.5, 0.5, 0.5), $resultBlock->getBucketEmptySound());

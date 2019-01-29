@@ -27,13 +27,15 @@ use pocketmine\block\Block;
 use pocketmine\block\BlockFactory;
 use pocketmine\entity\EffectInstance;
 use pocketmine\entity\Living;
-use pocketmine\event\entity\ProjectileHitEntityEvent;
 use pocketmine\event\entity\ProjectileHitBlockEvent;
+use pocketmine\event\entity\ProjectileHitEntityEvent;
 use pocketmine\event\entity\ProjectileHitEvent;
 use pocketmine\item\Potion;
 use pocketmine\network\mcpe\protocol\LevelEventPacket;
 use pocketmine\network\mcpe\protocol\LevelSoundEventPacket;
 use pocketmine\utils\Color;
+use function round;
+use function sqrt;
 
 class SplashPotion extends Throwable{
 
@@ -42,13 +44,13 @@ class SplashPotion extends Throwable{
 	protected $gravity = 0.05;
 	protected $drag = 0.01;
 
-	protected function initEntity(){
+	protected function initEntity() : void{
 		parent::initEntity();
 
 		$this->setPotionId($this->namedtag->getShort("PotionId", 0));
 	}
 
-	public function saveNBT(){
+	public function saveNBT() : void{
 		parent::saveNBT();
 		$this->namedtag->setShort("PotionId", $this->getPotionId());
 	}
@@ -81,8 +83,8 @@ class SplashPotion extends Throwable{
 
 		if($hasEffects){
 			if(!$this->willLinger()){
-				foreach($this->level->getNearbyEntities($this->boundingBox->grow(4.125, 2.125, 4.125), $this) as $entity){
-					if($entity instanceof Living){
+				foreach($this->level->getNearbyEntities($this->boundingBox->expandedCopy(4.125, 2.125, 4.125), $this) as $entity){
+					if($entity instanceof Living and $entity->isAlive()){
 						$distanceSquared = $entity->distanceSquared($this);
 						if($distanceSquared > 16){ //4 blocks
 							continue;
@@ -124,8 +126,6 @@ class SplashPotion extends Throwable{
 				}
 			}
 		}
-
-		$this->flagForDespawn();
 	}
 
 	/**
@@ -153,6 +153,7 @@ class SplashPotion extends Throwable{
 
 	/**
 	 * Sets whether this splash potion will create an area-effect-cloud when it lands.
+	 *
 	 * @param bool $value
 	 */
 	public function setLinger(bool $value = true) : void{

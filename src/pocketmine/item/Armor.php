@@ -30,6 +30,8 @@ use pocketmine\item\enchantment\ProtectionEnchantment;
 use pocketmine\nbt\tag\IntTag;
 use pocketmine\utils\Binary;
 use pocketmine\utils\Color;
+use function lcg_value;
+use function mt_rand;
 
 abstract class Armor extends Durable{
 
@@ -53,6 +55,7 @@ abstract class Armor extends Durable{
 
 	/**
 	 * Sets the dyed colour of this armour piece. This generally only applies to leather armour.
+	 *
 	 * @param Color $color
 	 */
 	public function setCustomColor(Color $color) : void{

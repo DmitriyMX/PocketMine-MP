@@ -33,6 +33,7 @@ use pocketmine\item\ItemFactory;
 use pocketmine\level\Position;
 use pocketmine\nbt\tag\ByteTag;
 use pocketmine\nbt\tag\IntTag;
+use function get_class;
 
 class FallingBlock extends Entity{
 	public const NETWORK_ID = self::FALLING_BLOCK;
@@ -50,7 +51,7 @@ class FallingBlock extends Entity{
 
 	public $canCollide = false;
 
-	protected function initEntity(){
+	protected function initEntity() : void{
 		parent::initEntity();
 
 		$blockId = 0;
@@ -64,15 +65,14 @@ class FallingBlock extends Entity{
 		}
 
 		if($blockId === 0){
-			$this->close();
-			return;
+			throw new \UnexpectedValueException("Invalid " . get_class($this) . " entity: block ID is 0 or missing");
 		}
 
 		$damage = $this->namedtag->getByte("Data", 0);
 
 		$this->block = BlockFactory::get($blockId, $damage);
 
-		$this->propertyManager->setInt(self::DATA_VARIANT, BlockFactory::toStaticRuntimeId($this->block->getId(), $this->block->getDamage()));
+		$this->propertyManager->setInt(self::DATA_VARIANT, $this->block->getRuntimeId());
 	}
 
 	public function canCollideWith(Entity $entity) : bool{
@@ -83,7 +83,7 @@ class FallingBlock extends Entity{
 		return false;
 	}
 
-	public function attack(EntityDamageEvent $source){
+	public function attack(EntityDamageEvent $source) : void{
 		if($source->getCause() === EntityDamageEvent::CAUSE_VOID){
 			parent::attack($source);
 		}
@@ -114,7 +114,8 @@ class FallingBlock extends Entity{
 					//FIXME: anvils are supposed to destroy torches
 					$this->getLevel()->dropItem($this, ItemFactory::get($this->getBlock(), $this->getDamage()));
 				}else{
-					$this->server->getPluginManager()->callEvent($ev = new EntityBlockChangeEvent($this, $block, $blockTarget ?? $this->block));
+					$ev = new EntityBlockChangeEvent($this, $block, $blockTarget ?? $this->block);
+					$ev->call();
 					if(!$ev->isCancelled()){
 						$this->getLevel()->setBlock($pos, $ev->getTo(), true);
 					}
@@ -126,15 +127,16 @@ class FallingBlock extends Entity{
 		return $hasUpdate;
 	}
 
-	public function getBlock(){
+	public function getBlock() : int{
 		return $this->block->getId();
 	}
 
-	public function getDamage(){
+	public function getDamage() : int{
 		return $this->block->getDamage();
 	}
 
-	public function saveNBT(){
+	public function saveNBT() : void{
+		parent::saveNBT();
 		$this->namedtag->setInt("TileID", $this->block->getId(), true);
 		$this->namedtag->setByte("Data", $this->block->getDamage());
 	}

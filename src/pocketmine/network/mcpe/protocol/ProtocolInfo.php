@@ -39,15 +39,15 @@ interface ProtocolInfo{
 	/**
 	 * Actual Minecraft: PE protocol version
 	 */
-	public const CURRENT_PROTOCOL = 223;
+	public const CURRENT_PROTOCOL = 313;
 	/**
 	 * Current Minecraft PE version reported by the server. This is usually the earliest currently supported version.
 	 */
-	public const MINECRAFT_VERSION = 'v1.2.13';
+	public const MINECRAFT_VERSION = 'v1.8.0';
 	/**
 	 * Version number sent to clients in ping responses.
 	 */
-	public const MINECRAFT_VERSION_NETWORK = '1.2.13';
+	public const MINECRAFT_VERSION_NETWORK = '1.8.0';
 
 	public const LOGIN_PACKET = 0x01;
 	public const PLAY_STATUS_PACKET = 0x02;
@@ -66,13 +66,13 @@ interface ProtocolInfo{
 	public const ADD_ITEM_ENTITY_PACKET = 0x0f;
 	public const ADD_HANGING_ENTITY_PACKET = 0x10;
 	public const TAKE_ITEM_ENTITY_PACKET = 0x11;
-	public const MOVE_ENTITY_PACKET = 0x12;
+	public const MOVE_ENTITY_ABSOLUTE_PACKET = 0x12;
 	public const MOVE_PLAYER_PACKET = 0x13;
 	public const RIDER_JUMP_PACKET = 0x14;
 	public const UPDATE_BLOCK_PACKET = 0x15;
 	public const ADD_PAINTING_PACKET = 0x16;
 	public const EXPLODE_PACKET = 0x17;
-	public const LEVEL_SOUND_EVENT_PACKET = 0x18;
+	public const LEVEL_SOUND_EVENT_PACKET_V1 = 0x18;
 	public const LEVEL_EVENT_PACKET = 0x19;
 	public const BLOCK_EVENT_PACKET = 0x1a;
 	public const ENTITY_EVENT_PACKET = 0x1b;
@@ -154,5 +154,22 @@ interface ProtocolInfo{
 	public const SERVER_SETTINGS_RESPONSE_PACKET = 0x67;
 	public const SHOW_PROFILE_PACKET = 0x68;
 	public const SET_DEFAULT_GAME_TYPE_PACKET = 0x69;
+	public const REMOVE_OBJECTIVE_PACKET = 0x6a;
+	public const SET_DISPLAY_OBJECTIVE_PACKET = 0x6b;
+	public const SET_SCORE_PACKET = 0x6c;
+	public const LAB_TABLE_PACKET = 0x6d;
+	public const UPDATE_BLOCK_SYNCED_PACKET = 0x6e;
+	public const MOVE_ENTITY_DELTA_PACKET = 0x6f;
+	public const SET_SCOREBOARD_IDENTITY_PACKET = 0x70;
+	public const SET_LOCAL_PLAYER_AS_INITIALIZED_PACKET = 0x71;
+	public const UPDATE_SOFT_ENUM_PACKET = 0x72;
+	public const NETWORK_STACK_LATENCY_PACKET = 0x73;
+
+	public const SCRIPT_CUSTOM_EVENT_PACKET = 0x75;
+	public const SPAWN_PARTICLE_EFFECT_PACKET = 0x76;
+	public const AVAILABLE_ENTITY_IDENTIFIERS_PACKET = 0x77;
+	public const LEVEL_SOUND_EVENT_PACKET = 0x78;
+	public const NETWORK_CHUNK_PUBLISHER_UPDATE_PACKET = 0x79;
+	public const BIOME_DEFINITION_LIST_PACKET = 0x7a;
 
 }

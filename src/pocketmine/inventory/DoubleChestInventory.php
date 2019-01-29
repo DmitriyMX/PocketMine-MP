@@ -26,6 +26,9 @@ namespace pocketmine\inventory;
 use pocketmine\item\Item;
 use pocketmine\Player;
 use pocketmine\tile\Chest;
+use function array_merge;
+use function array_slice;
+use function count;
 
 class DoubleChestInventory extends ChestInventory implements InventoryHolder{
 	/** @var ChestInventory */
@@ -60,15 +63,16 @@ class DoubleChestInventory extends ChestInventory implements InventoryHolder{
 	}
 
 	public function getItem(int $index) : Item{
-		return $index < $this->left->getSize() ? $this->left->getItem($index) : $this->right->getItem($index - $this->right->getSize());
+		return $index < $this->left->getSize() ? $this->left->getItem($index) : $this->right->getItem($index - $this->left->getSize());
 	}
 
 	public function setItem(int $index, Item $item, bool $send = true) : bool{
-		return $index < $this->left->getSize() ? $this->left->setItem($index, $item, $send) : $this->right->setItem($index - $this->right->getSize(), $item, $send);
-	}
-
-	public function clear(int $index, bool $send = true) : bool{
-		return $index < $this->left->getSize() ? $this->left->clear($index, $send) : $this->right->clear($index - $this->right->getSize(), $send);
+		$old = $this->getItem($index);
+		if($index < $this->left->getSize() ? $this->left->setItem($index, $item, $send) : $this->right->setItem($index - $this->left->getSize(), $item, $send)){
+			$this->onSlotChange($index, $old, $send);
+			return true;
+		}
+		return false;
 	}
 
 	public function getContents(bool $includeEmpty = false) : array{

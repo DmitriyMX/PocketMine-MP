@@ -24,12 +24,15 @@ declare(strict_types=1);
 namespace pocketmine\block;
 
 use pocketmine\event\block\BlockSpreadEvent;
+use pocketmine\item\Hoe;
 use pocketmine\item\Item;
 use pocketmine\item\ItemFactory;
+use pocketmine\item\Shovel;
 use pocketmine\level\generator\object\TallGrass as TallGrassObject;
 use pocketmine\math\Vector3;
 use pocketmine\Player;
 use pocketmine\utils\Random;
+use function mt_rand;
 
 class Grass extends Solid{
 
@@ -65,7 +68,8 @@ class Grass extends Solid{
 		$lightAbove = $this->level->getFullLightAt($this->x, $this->y + 1, $this->z);
 		if($lightAbove < 4 and BlockFactory::$lightFilter[$this->level->getBlockIdAt($this->x, $this->y + 1, $this->z)] >= 3){ //2 plus 1 standard filter amount
 			//grass dies
-			$this->level->getServer()->getPluginManager()->callEvent($ev = new BlockSpreadEvent($this, $this, BlockFactory::get(Block::DIRT)));
+			$ev = new BlockSpreadEvent($this, $this, BlockFactory::get(Block::DIRT));
+			$ev->call();
 			if(!$ev->isCancelled()){
 				$this->level->setBlock($this, $ev->getNewState(), false, false);
 			}
@@ -84,7 +88,8 @@ class Grass extends Solid{
 					continue;
 				}
 
-				$this->level->getServer()->getPluginManager()->callEvent($ev = new BlockSpreadEvent($b = $this->level->getBlockAt($x, $y, $z), $this, BlockFactory::get(Block::GRASS)));
+				$ev = new BlockSpreadEvent($b = $this->level->getBlockAt($x, $y, $z), $this, BlockFactory::get(Block::GRASS));
+				$ev->call();
 				if(!$ev->isCancelled()){
 					$this->level->setBlock($b, $ev->getNewState(), false, false);
 				}
@@ -98,13 +103,13 @@ class Grass extends Solid{
 			TallGrassObject::growGrass($this->getLevel(), $this, new Random(mt_rand()), 8, 2);
 
 			return true;
-		}elseif($item->isHoe()){
-			$item->useOn($this);
+		}elseif($item instanceof Hoe){
+			$item->applyDamage(1);
 			$this->getLevel()->setBlock($this, BlockFactory::get(Block::FARMLAND));
 
 			return true;
-		}elseif($item->isShovel() and $this->getSide(Vector3::SIDE_UP)->getId() === Block::AIR){
-			$item->useOn($this);
+		}elseif($item instanceof Shovel and $this->getSide(Vector3::SIDE_UP)->getId() === Block::AIR){
+			$item->applyDamage(1);
 			$this->getLevel()->setBlock($this, BlockFactory::get(Block::GRASS_PATH));
 
 			return true;

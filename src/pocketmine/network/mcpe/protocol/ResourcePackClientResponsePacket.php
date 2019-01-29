@@ -27,6 +27,7 @@ namespace pocketmine\network\mcpe\protocol;
 
 
 use pocketmine\network\mcpe\NetworkSession;
+use function count;
 
 class ResourcePackClientResponsePacket extends DataPacket{
 	public const NETWORK_ID = ProtocolInfo::RESOURCE_PACK_CLIENT_RESPONSE_PACKET;
@@ -60,5 +61,4 @@ class ResourcePackClientResponsePacket extends DataPacket{
 	public function handle(NetworkSession $session) : bool{
 		return $session->handleResourcePackClientResponse($this);
 	}
-
 }

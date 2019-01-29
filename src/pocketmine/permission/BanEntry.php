@@ -23,6 +23,13 @@ declare(strict_types=1);
 
 namespace pocketmine\permission;
 
+use function array_shift;
+use function explode;
+use function implode;
+use function strlen;
+use function strtolower;
+use function trim;
+
 class BanEntry{
 	/**
 	 * @var string
@@ -119,6 +126,7 @@ class BanEntry{
 	 * @link https://bugs.php.net/bug.php?id=75992
 	 *
 	 * @param \DateTime $dateTime
+	 *
 	 * @throws \RuntimeException if the argument can't be parsed from a formatted date string
 	 */
 	private static function validateDate(\DateTime $dateTime) : void{
@@ -168,7 +176,7 @@ class BanEntry{
 				}
 
 				$expire = trim(array_shift($str));
-				if(strtolower($expire) !== "forever" and strlen($expire) > 0){
+				if($expire !== "" and strtolower($expire) !== "forever"){
 					$entry->setExpires(self::parseDate($expire));
 				}
 				if(empty($str)){

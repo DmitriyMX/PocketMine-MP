@@ -25,6 +25,7 @@ namespace pocketmine\item;
 
 use pocketmine\entity\Effect;
 use pocketmine\entity\EffectInstance;
+use function lcg_value;
 
 class RottenFlesh extends Food{
 
@@ -49,5 +50,4 @@ class RottenFlesh extends Food{
 
 		return [];
 	}
-
 }

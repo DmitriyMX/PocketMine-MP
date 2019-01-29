@@ -34,6 +34,8 @@ use pocketmine\network\mcpe\protocol\types\CommandOriginData;
 use pocketmine\network\mcpe\protocol\types\EntityLink;
 use pocketmine\utils\BinaryStream;
 use pocketmine\utils\UUID;
+use function count;
+use function strlen;
 
 class NetworkBinaryStream extends BinaryStream{
 
@@ -65,7 +67,7 @@ class NetworkBinaryStream extends BinaryStream{
 
 	public function getSlot() : Item{
 		$id = $this->getVarInt();
-		if($id <= 0){
+		if($id === 0){
 			return ItemFactory::get(0, 0, 0);
 		}
 
@@ -109,7 +111,22 @@ class NetworkBinaryStream extends BinaryStream{
 		$this->putVarInt($auxValue);
 
 		$nbt = $item->getCompoundTag();
-		$this->putLShort(strlen($nbt));
+		$nbtLen = strlen($nbt);
+		if($nbtLen > 32767){
+			/*
+			 * TODO: Workaround bug in the protocol (overflow)
+			 * Encoded tags larger than 32KB overflow the length field, so we can't send these over network.
+			 * However, it's unreasonable to randomly throw this burden off onto users by crashing their servers, so the
+			 * next best solution is to just not send the NBT. This is also not an ideal solution (books and the like
+			 * with too-large tags won't work on the client side) but it's better than crashing the server or client due
+			 * to a protocol bug. Mojang have confirmed this will be resolved by a future MCPE release, so we'll just
+			 * work around this problem until then.
+			 */
+			$nbt = "";
+			$nbtLen = 0;
+		}
+
+		$this->putLShort($nbtLen);
 		$this->put($nbt);
 
 		$this->putVarInt(0); //CanPlaceOn entry count (TODO)
@@ -160,7 +177,7 @@ class NetworkBinaryStream extends BinaryStream{
 					$value = $this->getVector3();
 					break;
 				default:
-					$value = [];
+					throw new \UnexpectedValueException("Invalid data type " . $type);
 			}
 			if($types){
 				$data[$key] = [$type, $value];
@@ -214,6 +231,9 @@ class NetworkBinaryStream extends BinaryStream{
 					break;
 				case Entity::DATA_TYPE_VECTOR3F:
 					$this->putVector3Nullable($d[1]);
+					break;
+				default:
+					throw new \UnexpectedValueException("Invalid data type " . $d[0]);
 			}
 		}
 	}

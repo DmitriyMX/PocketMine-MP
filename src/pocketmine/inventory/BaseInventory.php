@@ -32,6 +32,11 @@ use pocketmine\network\mcpe\protocol\InventoryContentPacket;
 use pocketmine\network\mcpe\protocol\InventorySlotPacket;
 use pocketmine\network\mcpe\protocol\types\ContainerIds;
 use pocketmine\Player;
+use function array_slice;
+use function count;
+use function max;
+use function min;
+use function spl_object_hash;
 
 abstract class BaseInventory implements Inventory{
 
@@ -45,6 +50,8 @@ abstract class BaseInventory implements Inventory{
 	protected $slots = [];
 	/** @var Player[] */
 	protected $viewers = [];
+	/** @var InventoryEventProcessor */
+	protected $eventProcessor;
 
 	/**
 	 * @param Item[] $items
@@ -153,10 +160,6 @@ abstract class BaseInventory implements Inventory{
 		$this->clearAll();
 	}
 
-	protected function doSetItemEvents(int $index, Item $newItem) : ?Item{
-		return $newItem;
-	}
-
 	public function setItem(int $index, Item $item, bool $send = true) : bool{
 		if($item->isNull()){
 			$item = ItemFactory::get(Item::AIR, 0, 0);
@@ -164,14 +167,18 @@ abstract class BaseInventory implements Inventory{
 			$item = clone $item;
 		}
 
-		$newItem = $this->doSetItemEvents($index, $item);
-		if($newItem === null){
-			return false;
+		$oldItem = $this->getItem($index);
+		if($this->eventProcessor !== null){
+			$newItem = $this->eventProcessor->onSlotChange($this, $index, $oldItem, $item);
+			if($newItem === null){
+				return false;
+			}
+		}else{
+			$newItem = $item;
 		}
 
-		$old = $this->getItem($index);
 		$this->slots[$index] = $newItem->isNull() ? null : $newItem;
-		$this->onSlotChange($index, $old, $send);
+		$this->onSlotChange($index, $oldItem, $send);
 
 		return true;
 	}
@@ -382,6 +389,7 @@ abstract class BaseInventory implements Inventory{
 
 	/**
 	 * Removes the inventory window from all players currently viewing it.
+	 *
 	 * @param bool $force Force removal of permanent windows such as the player's own inventory. Used internally.
 	 */
 	public function removeAllViewers(bool $force = false) : void{
@@ -396,7 +404,8 @@ abstract class BaseInventory implements Inventory{
 	}
 
 	public function open(Player $who) : bool{
-		$who->getServer()->getPluginManager()->callEvent($ev = new InventoryOpenEvent($this, $who));
+		$ev = new InventoryOpenEvent($this, $who);
+		$ev->call();
 		if($ev->isCancelled()){
 			return false;
 		}
@@ -470,5 +479,13 @@ abstract class BaseInventory implements Inventory{
 
 	public function slotExists(int $slot) : bool{
 		return $slot >= 0 and $slot < $this->slots->getSize();
+	}
+
+	public function getEventProcessor() : ?InventoryEventProcessor{
+		return $this->eventProcessor;
+	}
+
+	public function setEventProcessor(?InventoryEventProcessor $eventProcessor) : void{
+		$this->eventProcessor = $eventProcessor;
 	}
 }

@@ -25,14 +25,15 @@ namespace pocketmine\block;
 
 use pocketmine\item\Item;
 use pocketmine\level\Position;
-use pocketmine\utils\MainLogger;
+use function file_get_contents;
+use function json_decode;
+use function max;
+use function min;
 
 /**
  * Manages block registration and instance creation
  */
 class BlockFactory{
-	/** @var \SplFixedArray<Block> */
-	private static $list = null;
 	/** @var \SplFixedArray<Block> */
 	private static $fullList = null;
 
@@ -65,7 +66,6 @@ class BlockFactory{
 	 * this if you need to reset the block factory back to its original defaults for whatever reason.
 	 */
 	public static function init() : void{
-		self::$list = new \SplFixedArray(256);
 		self::$fullList = new \SplFixedArray(4096);
 
 		self::$light = new \SplFixedArray(256);
@@ -327,17 +327,15 @@ class BlockFactory{
 
 		//TODO: RESERVED6
 
-		foreach(self::$list as $id => $block){
-			if($block === null){
+		for($id = 0, $size = self::$fullList->getSize() >> 4; $id < $size; ++$id){
+			if(self::$fullList[$id << 4] === null){
 				self::registerBlock(new UnknownBlock($id));
 			}
 		}
+	}
 
-		/** @var mixed[] $runtimeIdMap */
-		$runtimeIdMap = json_decode(file_get_contents(\pocketmine\RESOURCE_PATH . "runtimeid_table.json"), true);
-		foreach($runtimeIdMap as $obj){
-			self::registerMapping($obj["runtimeID"], $obj["id"], $obj["data"]);
-		}
+	public static function isInit() : bool{
+		return self::$fullList !== null;
 	}
 
 	/**
@@ -360,8 +358,6 @@ class BlockFactory{
 			throw new \RuntimeException("Trying to overwrite an already registered block");
 		}
 
-		self::$list[$id] = clone $block;
-
 		for($meta = 0; $meta < 16; ++$meta){
 			$variant = clone $block;
 			$variant->setDamage($meta);
@@ -372,7 +368,7 @@ class BlockFactory{
 		self::$transparent[$id] = $block->isTransparent();
 		self::$hardness[$id] = $block->getHardness();
 		self::$light[$id] = $block->getLightLevel();
-		self::$lightFilter[$id] = $block->getLightFilter() + 1; //opacity plus 1 standard light filter
+		self::$lightFilter[$id] = min(15, $block->getLightFilter() + 1); //opacity plus 1 standard light filter
 		self::$diffusesSkyLight[$id] = $block->diffusesSkyLight();
 		self::$blastResistance[$id] = $block->getBlastResistance();
 	}
@@ -423,11 +419,20 @@ class BlockFactory{
 	 * Returns whether a specified block ID is already registered in the block factory.
 	 *
 	 * @param int $id
+	 *
 	 * @return bool
 	 */
 	public static function isRegistered(int $id) : bool{
-		$b = self::$list[$id];
+		$b = self::$fullList[$id << 4];
 		return $b !== null and !($b instanceof UnknownBlock);
+	}
+
+	public static function registerStaticRuntimeIdMappings() : void{
+		/** @var mixed[] $runtimeIdMap */
+		$runtimeIdMap = json_decode(file_get_contents(\pocketmine\RESOURCE_PATH . "runtimeid_table.json"), true);
+		foreach($runtimeIdMap as $k => $obj){
+			self::registerMapping($k, $obj["id"], $obj["data"]);
+		}
 	}
 
 	/**
@@ -439,19 +444,12 @@ class BlockFactory{
 	 * @return int
 	 */
 	public static function toStaticRuntimeId(int $id, int $meta = 0) : int{
-		if($id === Block::AIR){
-			//TODO: HACK! (weird air blocks with non-zero damage values shouldn't turn into update! blocks)
-			$meta = 0;
-		}
-
-		$index = ($id << 4) | $meta;
-		if(!isset(self::$staticRuntimeIdMap[$index])){
-			self::registerMapping($rtId = ++self::$lastRuntimeId, $id, $meta);
-			MainLogger::getLogger()->error("ID $id meta $meta does not have a corresponding block static runtime ID, added a new unknown runtime ID ($rtId)");
-			return $rtId;
-		}
-
-		return self::$staticRuntimeIdMap[$index];
+		/*
+		 * try id+meta first
+		 * if not found, try id+0 (strip meta)
+		 * if still not found, return update! block
+		 */
+		return self::$staticRuntimeIdMap[($id << 4) | $meta] ?? self::$staticRuntimeIdMap[$id << 4] ?? self::$staticRuntimeIdMap[BlockIds::INFO_UPDATE << 4];
 	}
 
 	/**

@@ -25,6 +25,7 @@ namespace pocketmine\level;
 
 use pocketmine\math\Vector3;
 use pocketmine\utils\MainLogger;
+use function assert;
 
 class Position extends Vector3{
 
@@ -94,7 +95,13 @@ class Position extends Vector3{
 	 * @return bool
 	 */
 	public function isValid() : bool{
-		return $this->getLevel() instanceof Level;
+		if($this->level !== null and $this->level->isClosed()){
+			$this->level = null;
+
+			return false;
+		}
+
+		return $this->level !== null;
 	}
 
 	/**

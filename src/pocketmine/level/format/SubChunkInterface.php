@@ -27,6 +27,7 @@ interface SubChunkInterface{
 
 	/**
 	 * @param bool $checkLight
+	 *
 	 * @return bool
 	 */
 	public function isEmpty(bool $checkLight = true) : bool;
@@ -87,7 +88,7 @@ interface SubChunkInterface{
 	 *
 	 * @return bool
 	 */
-	public function setBlock(int $x, int $y, int $z, $id = null, $data = null) : bool;
+	public function setBlock(int $x, int $y, int $z, ?int $id = null, ?int $data = null) : bool;
 
 	/**
 	 * @param int $x
@@ -201,9 +202,4 @@ interface SubChunkInterface{
 	 * @return string
 	 */
 	public function networkSerialize() : string;
-
-	/**
-	 * @return string
-	 */
-	public function fastSerialize() : string;
 }

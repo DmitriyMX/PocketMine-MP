@@ -32,6 +32,7 @@ use pocketmine\network\mcpe\protocol\ProtocolInfo;
 use pocketmine\network\Network;
 use pocketmine\Player;
 use pocketmine\Server;
+use pocketmine\snooze\SleeperNotifier;
 use raklib\protocol\EncapsulatedPacket;
 use raklib\protocol\PacketReliability;
 use raklib\RakLib;
@@ -39,13 +40,21 @@ use raklib\server\RakLibServer;
 use raklib\server\ServerHandler;
 use raklib\server\ServerInstance;
 use raklib\utils\InternetAddress;
+use function addcslashes;
+use function bin2hex;
+use function get_class;
+use function implode;
+use function rtrim;
+use function spl_object_hash;
+use function unserialize;
+use const PTHREADS_INHERIT_CONSTANTS;
 
 class RakLibInterface implements ServerInstance, AdvancedSourceInterface{
 	/**
 	 * Sometimes this gets changed when the MCPE-layer protocol gets broken to the point where old and new can't
 	 * communicate. It's important that we check this to avoid catastrophes.
 	 */
-	private const MCPE_RAKNET_PROTOCOL_VERSION = 8;
+	private const MCPE_RAKNET_PROTOCOL_VERSION = 9;
 
 	/** @var Server */
 	private $server;
@@ -68,40 +77,41 @@ class RakLibInterface implements ServerInstance, AdvancedSourceInterface{
 	/** @var ServerHandler */
 	private $interface;
 
+	/** @var SleeperNotifier */
+	private $sleeper;
+
 	public function __construct(Server $server){
 		$this->server = $server;
 
+		$this->sleeper = new SleeperNotifier();
 		$this->rakLib = new RakLibServer(
 			$this->server->getLogger(),
 			\pocketmine\COMPOSER_AUTOLOADER_PATH,
-			new InternetAddress($this->server->getIp() === "" ? "0.0.0.0" : $this->server->getIp(), $this->server->getPort(), 4),
+			new InternetAddress($this->server->getIp(), $this->server->getPort(), 4),
 			(int) $this->server->getProperty("network.max-mtu-size", 1492),
-			self::MCPE_RAKNET_PROTOCOL_VERSION
+			self::MCPE_RAKNET_PROTOCOL_VERSION,
+			$this->sleeper
 		);
 		$this->interface = new ServerHandler($this->rakLib, $this);
 	}
 
 	public function start(){
-		$this->rakLib->start();
+		$this->server->getTickSleeper()->addNotifier($this->sleeper, function() : void{
+			$this->process();
+		});
+		$this->rakLib->start(PTHREADS_INHERIT_CONSTANTS); //HACK: MainLogger needs constants for exception logging
 	}
 
 	public function setNetwork(Network $network){
 		$this->network = $network;
 	}
 
-	public function process() : bool{
-		$work = false;
-		if($this->interface->handlePacket()){
-			$work = true;
-			while($this->interface->handlePacket()){
-			}
-		}
+	public function process() : void{
+		while($this->interface->handlePacket()){}
 
 		if(!$this->rakLib->isRunning() and !$this->rakLib->isShutdown()){
 			throw new \Exception("RakLib Thread crashed");
 		}
-
-		return $work;
 	}
 
 	public function closeSession(string $identifier, string $reason) : void{
@@ -124,18 +134,24 @@ class RakLibInterface implements ServerInstance, AdvancedSourceInterface{
 	}
 
 	public function shutdown(){
+		$this->server->getTickSleeper()->removeNotifier($this->sleeper);
 		$this->interface->shutdown();
 	}
 
 	public function emergencyShutdown(){
+		$this->server->getTickSleeper()->removeNotifier($this->sleeper);
 		$this->interface->emergencyShutdown();
 	}
 
 	public function openSession(string $identifier, string $address, int $port, int $clientID) : void{
 		$ev = new PlayerCreationEvent($this, Player::class, Player::class, $address, $port);
-		$this->server->getPluginManager()->callEvent($ev);
+		$ev->call();
 		$class = $ev->getPlayerClass();
 
+		/**
+		 * @var Player $player
+		 * @see Player::__construct()
+		 */
 		$player = new $class($this, $ev->getAddress(), $ev->getPort());
 		$this->players[$identifier] = $player;
 		$this->identifiersACK[$identifier] = 0;
@@ -146,17 +162,19 @@ class RakLibInterface implements ServerInstance, AdvancedSourceInterface{
 	public function handleEncapsulated(string $identifier, EncapsulatedPacket $packet, int $flags) : void{
 		if(isset($this->players[$identifier])){
 			//get this now for blocking in case the player was closed before the exception was raised
-			$address = $this->players[$identifier]->getAddress();
+			$player = $this->players[$identifier];
+			$address = $player->getAddress();
 			try{
 				if($packet->buffer !== ""){
 					$pk = PacketPool::getPacket($packet->buffer);
-					$this->players[$identifier]->handleDataPacket($pk);
+					$player->handleDataPacket($pk);
 				}
 			}catch(\Throwable $e){
 				$logger = $this->server->getLogger();
 				$logger->debug("Packet " . (isset($pk) ? get_class($pk) : "unknown") . " 0x" . bin2hex($packet->buffer));
 				$logger->logException($e);
 
+				$player->close($player->getLeaveMessage(), "Internal server error");
 				$this->interface->blockAddress($address, 5);
 			}
 		}

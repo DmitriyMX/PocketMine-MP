@@ -26,6 +26,17 @@ namespace pocketmine\item;
 use pocketmine\block\Block;
 use pocketmine\block\BlockFactory;
 use pocketmine\nbt\tag\CompoundTag;
+use function constant;
+use function defined;
+use function explode;
+use function get_class;
+use function gettype;
+use function is_numeric;
+use function is_object;
+use function is_string;
+use function str_replace;
+use function strtoupper;
+use function trim;
 
 /**
  * Manages Item instance creation and registration
@@ -37,8 +48,6 @@ class ItemFactory{
 
 	public static function init(){
 		self::$list = new \SplFixedArray(65536);
-
-		self::registerItem(new Anvil(), true);
 
 		self::registerItem(new Shovel(Item::IRON_SHOVEL, 0, "Iron Shovel", TieredTool::TIER_IRON));
 		self::registerItem(new Pickaxe(Item::IRON_PICKAXE, 0, "Iron Pickaxe", TieredTool::TIER_IRON));
@@ -118,7 +127,7 @@ class ItemFactory{
 		self::registerItem(new Snowball());
 		self::registerItem(new Boat());
 		self::registerItem(new Item(Item::LEATHER, 0, "Leather"));
-
+		//TODO: KELP
 		self::registerItem(new Item(Item::BRICK, 0, "Brick"));
 		self::registerItem(new Item(Item::CLAY_BALL, 0, "Clay"));
 		self::registerItem(new ItemBlock(Block::SUGARCANE_BLOCK, 0, Item::SUGARCANE));
@@ -222,15 +231,20 @@ class ItemFactory{
 		self::registerItem(new SplashPotion());
 
 		//TODO: LINGERING_POTION
-
+		//TODO: SPARKLER
 		//TODO: COMMAND_BLOCK_MINECART
 		//TODO: ELYTRA
 		self::registerItem(new Item(Item::SHULKER_SHELL, 0, "Shulker Shell"));
 		self::registerItem(new Banner());
-
-		//TODO: TOTEM
-
+		//TODO: MEDICINE
+		//TODO: BALLOON
+		//TODO: RAPID_FERTILIZER
+		self::registerItem(new Totem());
+		self::registerItem(new Item(Item::BLEACH, 0, "Bleach")); //EDU
 		self::registerItem(new Item(Item::IRON_NUGGET, 0, "Iron Nugget"));
+		//TODO: ICE_BOMB
+
+		//TODO: TRIDENT
 
 		self::registerItem(new Beetroot());
 		self::registerItem(new BeetrootSeeds());
@@ -239,9 +253,14 @@ class ItemFactory{
 		self::registerItem(new Clownfish());
 		self::registerItem(new Pufferfish());
 		self::registerItem(new CookedSalmon());
-
+		self::registerItem(new DriedKelp());
+		self::registerItem(new Item(Item::NAUTILUS_SHELL, 0, "Nautilus Shell"));
 		self::registerItem(new GoldenAppleEnchanted());
+		self::registerItem(new Item(Item::HEART_OF_THE_SEA, 0, "Heart of the Sea"));
+		self::registerItem(new Item(Item::TURTLE_SHELL_PIECE, 0, "Scute"));
+		//TODO: TURTLE_HELMET
 
+		//TODO: COMPOUND
 		//TODO: RECORD_13
 		//TODO: RECORD_CAT
 		//TODO: RECORD_BLOCKS
@@ -275,7 +294,7 @@ class ItemFactory{
 			throw new \RuntimeException("Trying to overwrite an already registered item");
 		}
 
-		self::$list[$id] = clone $item;
+		self::$list[self::getListOffset($id)] = clone $item;
 	}
 
 	/**
@@ -296,10 +315,10 @@ class ItemFactory{
 
 		try{
 			/** @var Item|null $listed */
-			$listed = self::$list[$id];
+			$listed = self::$list[self::getListOffset($id)];
 			if($listed !== null){
 				$item = clone $listed;
-			}elseif($id < 256){
+			}elseif($id < 256){ //intentionally includes negatives, for extended block IDs
 				/* Blocks must have a damage value 0-15, but items can have damage value -1 to indicate that they are
 				 * crafting ingredients with any-damage. */
 				$item = new ItemBlock($id, $meta);
@@ -347,13 +366,13 @@ class ItemFactory{
 			if(!isset($b[1])){
 				$meta = 0;
 			}elseif(is_numeric($b[1])){
-				$meta = $b[1] & 0xFFFF;
+				$meta = (int) $b[1];
 			}else{
 				throw new \InvalidArgumentException("Unable to parse \"" . $b[1] . "\" from \"" . $str . "\" as a valid meta value");
 			}
 
 			if(is_numeric($b[0])){
-				$item = self::get(((int) $b[0]) & 0xFFFF, $meta);
+				$item = self::get((int) $b[0], $meta);
 			}elseif(defined(ItemIds::class . "::" . strtoupper($b[0]))){
 				$item = self::get(constant(ItemIds::class . "::" . strtoupper($b[0])), $meta);
 			}else{
@@ -374,6 +393,13 @@ class ItemFactory{
 		if($id < 256){
 			return BlockFactory::isRegistered($id);
 		}
-		return self::$list[$id] !== null;
+		return self::$list[self::getListOffset($id)] !== null;
+	}
+
+	private static function getListOffset(int $id) : int{
+		if($id < -0x8000 or $id > 0x7fff){
+			throw new \InvalidArgumentException("ID must be in range " . -0x8000 . " - " . 0x7fff);
+		}
+		return $id & 0xffff;
 	}
 }

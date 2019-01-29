@@ -24,6 +24,7 @@ declare(strict_types=1);
 namespace pocketmine\command;
 
 use pocketmine\lang\TextContainer;
+use function trim;
 
 class RemoteConsoleCommandSender extends ConsoleCommandSender{
 
@@ -47,6 +48,4 @@ class RemoteConsoleCommandSender extends ConsoleCommandSender{
 	public function getName() : string{
 		return "Rcon";
 	}
-
-
 }

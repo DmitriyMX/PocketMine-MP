@@ -26,6 +26,7 @@ namespace pocketmine\event\player;
 use pocketmine\event\Event;
 use pocketmine\network\SourceInterface;
 use pocketmine\Player;
+use function is_a;
 
 /**
  * Allows the creation of players overriding the base Player class
@@ -124,5 +125,4 @@ class PlayerCreationEvent extends Event{
 
 		$this->playerClass = $class;
 	}
-
 }

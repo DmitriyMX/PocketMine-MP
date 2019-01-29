@@ -24,6 +24,7 @@ declare(strict_types=1);
 namespace pocketmine\block;
 
 use pocketmine\item\Item;
+use function mt_rand;
 
 class RedMushroomBlock extends Solid{
 
@@ -50,5 +51,4 @@ class RedMushroomBlock extends Solid{
 			Item::get(Item::RED_MUSHROOM, 0, mt_rand(0, 2))
 		];
 	}
-
 }

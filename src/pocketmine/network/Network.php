@@ -26,11 +26,11 @@ declare(strict_types=1);
  */
 namespace pocketmine\network;
 
-use pocketmine\event\server\NetworkInterfaceCrashEvent;
 use pocketmine\event\server\NetworkInterfaceRegisterEvent;
 use pocketmine\event\server\NetworkInterfaceUnregisterEvent;
 use pocketmine\network\mcpe\protocol\PacketPool;
 use pocketmine\Server;
+use function spl_object_hash;
 
 class Network{
 
@@ -85,28 +85,24 @@ class Network{
 
 	public function processInterfaces(){
 		foreach($this->interfaces as $interface){
-			try{
-				$interface->process();
-			}catch(\Throwable $e){
-				$logger = $this->server->getLogger();
-				if(\pocketmine\DEBUG > 1){
-					$logger->logException($e);
-				}
-
-				$this->server->getPluginManager()->callEvent(new NetworkInterfaceCrashEvent($interface, $e));
-
-				$interface->emergencyShutdown();
-				$this->unregisterInterface($interface);
-				$logger->critical($this->server->getLanguage()->translateString("pocketmine.server.networkError", [get_class($interface), $e->getMessage()]));
-			}
+			$interface->process();
 		}
+	}
+
+	/**
+	 * @deprecated
+	 * @param SourceInterface $interface
+	 */
+	public function processInterface(SourceInterface $interface) : void{
+		$interface->process();
 	}
 
 	/**
 	 * @param SourceInterface $interface
 	 */
 	public function registerInterface(SourceInterface $interface){
-		$this->server->getPluginManager()->callEvent($ev = new NetworkInterfaceRegisterEvent($interface));
+		$ev = new NetworkInterfaceRegisterEvent($interface);
+		$ev->call();
 		if(!$ev->isCancelled()){
 			$interface->start();
 			$this->interfaces[$hash = spl_object_hash($interface)] = $interface;
@@ -122,7 +118,7 @@ class Network{
 	 * @param SourceInterface $interface
 	 */
 	public function unregisterInterface(SourceInterface $interface){
-		$this->server->getPluginManager()->callEvent(new NetworkInterfaceUnregisterEvent($interface));
+		(new NetworkInterfaceUnregisterEvent($interface))->call();
 		unset($this->interfaces[$hash = spl_object_hash($interface)], $this->advancedInterfaces[$hash]);
 	}
 
